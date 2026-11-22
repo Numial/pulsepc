@@ -79,6 +79,7 @@ input[type=color]{width:44px;height:28px;border:1px solid var(--borde);border-ra
 
   <div class="lienzo">
     <div class="movil"><div class="pantalla" id="pantalla"></div></div>
+    <p class="ayuda">Si una temperatura pasa del límite de alerta, su tarjeta parpadea en rojo en el móvil. Los botones del widget Multimedia controlan la música del PC.</p>
     <p class="ayuda">Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Los cambios se guardan solos y el móvil los aplica en un segundo. En el móvil, toca la pantalla para pasar de página.</p>
   </div>
 
@@ -89,6 +90,7 @@ input[type=color]{width:44px;height:28px;border:1px solid var(--borde);border-ra
       <div class="temas" id="temas"></div>
       <div id="colores"></div>
       <label>Mostrar cabecera <input type="checkbox" id="cabecera"></label>
+      <label>Alerta de temperatura (°C) <input type="number" id="alerta" min="50" max="110"></label>
     </div>
     <div class="bloque">
       <button class="peligro" id="restaurar">Restaurar diseño original</button>
@@ -98,7 +100,9 @@ input[type=color]{width:44px;height:28px;border:1px solid var(--borde);border-ra
 
 <script>
 const NOMBRES = {cpu:"CPU",ram:"Memoria",gpu:"GPU",temps:"Temperaturas",red:"Red",disco:"Discos",
-  nucleos:"Núcleos",gpu_detalle:"GPU detalle",ventiladores:"Ventiladores",reloj:"Reloj"};
+  nucleos:"Núcleos",gpu_detalle:"GPU detalle",ventiladores:"Ventiladores",reloj:"Reloj",
+  procesos:"Procesos",bateria:"Batería",multimedia:"Multimedia",grafica:"Gráfica"};
+const METRICAS = {cpu:"CPU",gpu:"GPU",ram:"Memoria",temp_cpu:"Temperatura CPU",temp_gpu:"Temperatura GPU",red:"Red (bajada)"};
 const ETQ_COLOR = {fondo:"Fondo",tarjeta:"Tarjetas",acento:"Acento",secundario:"Secundario",texto:"Texto"};
 const TEMAS = [
   {fondo:"#0E1116",tarjeta:"#171B22",acento:"#3EC7A0",secundario:"#5B9BF0",texto:"#E6E6E6"},
@@ -141,7 +145,7 @@ function colocar(p){
   });return out;
 }
 
-function valor(t){
+function valor(t,w){
   const s=stats;if(!s.cpu)return["–",null];
   const g=(s.gpu||[])[0];const f=(x,d=0)=>x==null?"–":Number(x).toFixed(d);
   switch(t){
@@ -155,6 +159,10 @@ function valor(t){
     case"nucleos":return[(s.cpu.nucleos||[]).length+" núcleos",null];
     case"ventiladores":return[(s.ventiladores||[]).length+" ventiladores",null];
     case"reloj":return[new Date().toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"}),null];
+    case"grafica":{const m=(w&&w.metrica)||"cpu";const mp={cpu:[s.cpu.uso,"%"],gpu:[g&&g.uso,"%"],ram:[s.ram.porcentaje,"%"],temp_cpu:[s.cpu.temp,"°C"],temp_gpu:[g&&g.temp,"°C"],red:[s.red.bajada_kbs,"KB/s"]}[m];return[METRICAS[m]+" "+f(mp[0])+" "+mp[1],null]}
+    case"procesos":{const p=s.procesos||[];return[p.length?p[0].nombre+" "+f(p[0].cpu,1)+" %":"Procesos",null]}
+    case"bateria":return s.bateria?[s.bateria.porcentaje+" %"+(s.bateria.cargando?" · cargando":""),s.bateria.porcentaje]:["Sin batería",null];
+    case"multimedia":{const m=s.medios||{};return[m.titulo?m.titulo:"⏮  ⏯  ⏭",null]}
   }return["",null];
 }
 
@@ -195,7 +203,7 @@ function pintar(){
     const w=p.widgets[o.i];if(o.f<0){fuera++;return}
     const el=document.createElement("div");el.className="w"+(o.i===selW?" sel":"");el.style.background=T.tarjeta;
     el.style.gridColumn=`${o.c+1} / span ${o.an}`;el.style.gridRow=`${o.f+1} / span ${o.al}`;
-    const[v,pc]=valor(w.tipo);
+    const[v,pc]=valor(w.tipo,w);
     el.innerHTML=`<div class="t">${esc(w.titulo||NOMBRES[w.tipo])}</div><div class="v">${esc(v)}</div>`+(pc!=null?`<div class="b"><i style="width:${Math.min(100,pc)}%"></i></div>`:"");
     el.onclick=()=>{selW=o.i;pintar()};
     el.draggable=true;el.dataset.i=o.i;
@@ -216,6 +224,7 @@ function pintar(){
       <label>Título <input type="text" id="wTit" style="width:150px" placeholder="${NOMBRES[w.tipo]}" value="${esc(w.titulo||"")}"></label>
       <label>Ancho (columnas) <input type="number" id="wAn" min="1" max="${p.columnas}" value="${w.ancho}"></label>
       <label>Alto (filas) <input type="number" id="wAl" min="1" max="${p.filas}" value="${w.alto}"></label>
+      ${w.tipo==="grafica"?`<label>Qué muestra <select id="wMet">${Object.keys(METRICAS).map(m=>`<option value="${m}"${m===(w.metrica||"cpu")?" selected":""}>${METRICAS[m]}</option>`).join("")}</select></label>`:""}
       <label>Tipo <select id="wTipo">${tipos.map(t=>`<option value="${t}"${t===w.tipo?" selected":""}>${NOMBRES[t]}</option>`).join("")}</select></label>
       <div class="fila"><button id="wAnt">◀ Antes</button><button id="wDes">Después ▶</button><button class="peligro" id="wBorrar">Quitar</button></div>
       ${fuera?`<p class="aviso">${fuera} widget(s) no caben en esta página.</p>`:""}`;
@@ -224,6 +233,7 @@ function pintar(){
     $("wAn").onchange=e=>{w.ancho=lim(e.target.value,1,p.columnas);cambio()};
     $("wAl").onchange=e=>{w.alto=lim(e.target.value,1,p.filas);cambio()};
     $("wTipo").onchange=e=>{w.tipo=e.target.value;cambio()};
+    if($("wMet"))$("wMet").onchange=e=>{w.metrica=e.target.value;cambio()};
     $("wAnt").onclick=()=>moverW(-1);$("wDes").onclick=()=>moverW(1);
     $("wBorrar").onclick=()=>{p.widgets.splice(selW,1);selW=-1;cambio()};
   }
@@ -235,6 +245,7 @@ function pintar(){
   $("colores").innerHTML=Object.keys(ETQ_COLOR).map(k=>`<label>${ETQ_COLOR[k]} <input type="color" data-k="${k}" value="${T[k]}"></label>`).join("");
   $("colores").querySelectorAll("input").forEach(i=>i.oninput=e=>{D.tema[e.target.dataset.k]=e.target.value.toUpperCase();pintarPantallaRapido();guardar()});
   $("cabecera").checked=!!D.cabecera;
+  if(document.activeElement!==$("alerta"))$("alerta").value=D.alerta_temp||90;
 }
 function pintarListaSolo(){const els=$("paginas").querySelectorAll(".pag span");els[pag]&&(els[pag].textContent=D.paginas[pag].nombre)}
 function pintarPantallaRapido(){const T=D.tema;document.documentElement.style.setProperty("--c-acento",T.acento);
@@ -246,6 +257,7 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
 
 $("nuevaPag").onclick=()=>{D.paginas.push({nombre:"Página "+(D.paginas.length+1),columnas:3,filas:2,widgets:[]});pag=D.paginas.length-1;selW=-1;cambio()};
 $("cabecera").onchange=e=>{D.cabecera=e.target.checked;cambio()};
+$("alerta").onchange=e=>{D.alerta_temp=lim(e.target.value,50,110);cambio()};
 $("restaurar").onclick=()=>{if(confirm("¿Volver al diseño original? Perderás tus cambios.")){D=JSON.parse(JSON.stringify(defecto));pag=0;selW=-1;cambio()}};
 
 // Datos en directo para la vista previa

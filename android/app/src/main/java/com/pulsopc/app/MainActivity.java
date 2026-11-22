@@ -65,6 +65,13 @@ public class MainActivity extends Activity {
         panel.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { panel.siguientePagina(); }
         });
+        panel.setOyenteAccion(new PanelView.OyenteAccion() {
+            @Override public void onAccion(final String accion) {
+                final String h = actual != null ? actual : host;
+                if (h == null) return;
+                new Thread(new Runnable() { public void run() { enviarAccion(h, accion); } }).start();
+            }
+        });
         panel.setOnLongClickListener(new View.OnLongClickListener() {
             @Override public boolean onLongClick(View v) { pedirIp(); return true; }
         });
@@ -194,6 +201,22 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** Boton multimedia del movil: el agente pulsa la tecla multimedia en el PC. */
+    private static void enviarAccion(String h, String accion) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) new URL("http://" + h + "/accion").openConnection();
+            c.setConnectTimeout(1500);
+            c.setReadTimeout(1500);
+            c.setDoOutput(true);
+            c.setRequestMethod("POST");
+            c.setRequestProperty("Content-Type", "application/json");
+            byte[] cuerpo = new JSONObject().put("accion", accion).toString().getBytes("UTF-8");
+            c.getOutputStream().write(cuerpo);
+            c.getInputStream().close();
+            c.disconnect();
+        } catch (Exception ignorado) { }
     }
 
     private static String pedir(String url, int timeoutMs) throws Exception {

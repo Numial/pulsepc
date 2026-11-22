@@ -319,6 +319,120 @@ def leer_lhm():
     return {"temperaturas": temps, "ventiladores": fans, "consumos": consumos}
 
 
+# ---------------------------------------------------------- procesos, bateria --
+
+_procs = {}
+
+
+def leer_procesos(n=6):
+    """Los procesos que mas CPU gastan, agrupados por nombre (p. ej. todos los chrome.exe)."""
+    ncpu = psutil.cpu_count() or 1
+    vistos = set()
+    grupos = {}
+    for p in psutil.process_iter(["name", "memory_info"]):
+        pid = p.pid
+        vistos.add(pid)
+        if pid not in _procs:
+            _procs[pid] = p
+            try:
+                p.cpu_percent(None)   # primera lectura: solo prepara la medida
+            except Exception:
+                pass
+            continue
+        try:
+            cpu = _procs[pid].cpu_percent(None) / ncpu
+        except Exception:
+            continue
+        nombre = (p.info.get("name") or "?")
+        if pid == 0 or nombre.lower() in ("system idle process", "idle"):
+            continue
+        mem = p.info.get("memory_info")
+        g = grupos.setdefault(nombre, {"nombre": nombre.rsplit(".exe", 1)[0], "cpu": 0.0, "ram_mb": 0.0})
+        g["cpu"] += cpu
+        g["ram_mb"] += (mem.rss / 1048576) if mem else 0
+    for pid in list(_procs):
+        if pid not in vistos:
+            del _procs[pid]
+    top = sorted(grupos.values(), key=lambda g: (g["cpu"], g["ram_mb"]), reverse=True)[:n]
+    for g in top:
+        g["cpu"] = round(g["cpu"], 1)
+        g["ram_mb"] = round(g["ram_mb"])
+    return top
+
+
+def leer_bateria():
+    try:
+        b = psutil.sensors_battery()
+    except Exception:
+        return None
+    if b is None:
+        return None
+    minutos = None
+    if b.secsleft not in (psutil.POWER_TIME_UNLIMITED, psutil.POWER_TIME_UNKNOWN) and b.secsleft > 0:
+        minutos = int(b.secsleft / 60)
+    return {"porcentaje": round(b.percent), "cargando": bool(b.power_plugged), "minutos": minutos}
+
+
+# -------------------------------------------------------------- multimedia --
+# Lo que suena ahora (titulo/artista) lo lee medios.ps1 con las APIs de Windows.
+# Los botones del movil envian teclas multimedia virtuales al PC.
+
+_medios = {"datos": {}, "t": 0.0}
+
+TECLAS = {"play": 0xB3, "siguiente": 0xB0, "anterior": 0xB1,
+          "vol_mas": 0xAF, "vol_menos": 0xAE, "silencio": 0xAD}
+
+
+def pulsar_tecla(accion):
+    vk = TECLAS.get(accion)
+    if vk is None or platform.system() != "Windows":
+        return False
+    import ctypes
+    u = ctypes.windll.user32
+    u.keybd_event(vk, 0, 1, 0)       # KEYEVENTF_EXTENDEDKEY
+    u.keybd_event(vk, 0, 1 | 2, 0)   # + KEYEVENTF_KEYUP
+    return True
+
+
+def bucle_medios():
+    script = os.path.join(DIR_AGENTE, "medios.ps1")
+    if platform.system() != "Windows" or not os.path.isfile(script):
+        return
+    while True:
+        try:
+            if not widget_en_uso("multimedia"):
+                time.sleep(5)
+                continue
+            proc = subprocess.Popen(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
+                                     "Bypass", "-File", script], stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                                    creationflags=SIN_VENTANA)
+            _procesos.append(proc)
+            for linea in proc.stdout:
+                try:
+                    _medios["datos"] = json.loads(linea.lstrip("\ufeff")) or {}
+                    _medios["t"] = time.time()
+                except ValueError:
+                    pass
+                if not widget_en_uso("multimedia"):
+                    proc.kill()
+                    break
+        except Exception as e:
+            print("Multimedia:", e)
+        time.sleep(10)
+
+
+def leer_medios():
+    return _medios["datos"] if time.time() - _medios["t"] < 5 else {}
+
+
+def widget_en_uso(tipo):
+    d = diseno_actual()
+    if not d:
+        return False
+    return any(w.get("tipo") == tipo for p in d.get("paginas", []) for w in p.get("widgets", []))
+
+
 def leer_temps_psutil():
     f = getattr(psutil, "sensors_temperatures", None)
     if not f:
@@ -405,6 +519,9 @@ class Muestreador:
             "ventiladores": fans,
             "consumos": consumos,
             "fuente_temps": fuente,
+            "procesos": leer_procesos() if widget_en_uso("procesos") else [],
+            "bateria": leer_bateria(),
+            "medios": leer_medios(),
         }
         self.t, self.red, self.disco = ahora, red, disco
         return stats
@@ -530,13 +647,15 @@ def bucle_usb(puerto_http, mantener_app=True):
 # asi que el movil lo aplica en el siguiente segundo sin reiniciar nada.
 
 TIPOS_WIDGET = ["cpu", "ram", "gpu", "temps", "red", "disco", "nucleos",
-                "gpu_detalle", "ventiladores", "reloj"]
+                "gpu_detalle", "ventiladores", "reloj", "procesos", "bateria", "multimedia", "grafica"]
+METRICAS_GRAFICA = ["cpu", "gpu", "ram", "temp_cpu", "temp_gpu", "red"]
 
 DISENO_POR_DEFECTO = {
     "version": 1,
     "tema": {"fondo": "#0E1116", "tarjeta": "#171B22", "acento": "#3EC7A0",
              "secundario": "#5B9BF0", "texto": "#E6E6E6"},
     "cabecera": True,
+    "alerta_temp": 90,
     "paginas": [
         {"nombre": "Resumen", "columnas": 3, "filas": 2, "widgets": [
             {"tipo": "cpu", "ancho": 1, "alto": 1},
@@ -585,18 +704,26 @@ def validar_diseno(d):
         for w in (p.get("widgets") or [])[:16]:
             if w.get("tipo") not in TIPOS_WIDGET:
                 continue
-            ws.append({
+            limpio = {
                 "tipo": w["tipo"],
                 "ancho": max(1, min(cols, int(w.get("ancho", 1)))),
                 "alto": max(1, min(filas, int(w.get("alto", 1)))),
                 "titulo": str(w.get("titulo", ""))[:30],
-            })
+            }
+            if w["tipo"] == "grafica":
+                m = w.get("metrica", "cpu")
+                limpio["metrica"] = m if m in METRICAS_GRAFICA else "cpu"
+            ws.append(limpio)
         paginas.append({"nombre": str(p.get("nombre", "Pagina"))[:20], "columnas": cols,
                         "filas": filas, "widgets": ws})
     if not paginas:
         raise ValueError("hace falta al menos una pagina")
+    try:
+        alerta = max(50, min(110, int(d.get("alerta_temp", 90))))
+    except (TypeError, ValueError):
+        alerta = 90
     return {"version": int(time.time()), "tema": tema, "cabecera": bool(d.get("cabecera", True)),
-            "paginas": paginas}
+            "alerta_temp": alerta, "paginas": paginas}
 
 
 def cargar_diseno():
@@ -679,7 +806,7 @@ class Manejador(BaseHTTPRequestHandler):
             datos["diseno"] = diseno_actual()
             self._json(datos)
         elif ruta == "/config":
-            self._json({"diseno": diseno_actual(), "tipos": TIPOS_WIDGET,
+            self._json({"diseno": diseno_actual(), "tipos": TIPOS_WIDGET, "metricas": METRICAS_GRAFICA,
                         "por_defecto": validar_diseno(DISENO_POR_DEFECTO)})
         elif ruta == "/editor":
             try:
@@ -693,6 +820,15 @@ class Manejador(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        if self.path.split("?")[0] == "/accion":
+            # Botones multimedia del movil: solo pulsan teclas multimedia, nada mas.
+            try:
+                n = int(self.headers.get("Content-Length", "0"))
+                accion = json.loads(self.rfile.read(min(n, 1000)).decode("utf-8")).get("accion")
+                self._json({"ok": pulsar_tecla(accion)})
+            except Exception as e:
+                self._json({"error": str(e)}, 400)
+            return
         if self.path.split("?")[0] != "/config":
             self.send_error(404)
             return
@@ -743,6 +879,7 @@ def arrancar(puerto=PUERTO_HTTP, intervalo=1.0, mantener_app=True):
     cargar_diseno()
     threading.Thread(target=bucle_gpu, daemon=True).start()
     threading.Thread(target=bucle_lhm, daemon=True).start()
+    threading.Thread(target=bucle_medios, daemon=True).start()
     threading.Thread(target=bucle_muestreo, args=(intervalo,), daemon=True).start()
     threading.Thread(target=bucle_anuncio, args=(puerto,), daemon=True).start()
     threading.Thread(target=bucle_usb, args=(puerto, mantener_app), daemon=True).start()

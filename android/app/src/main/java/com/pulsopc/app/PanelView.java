@@ -52,6 +52,19 @@ public class PanelView extends View {
 
     private final float[] histCpu = new float[N], histGpu = new float[N];
     private final float[] histBajada = new float[N], histSubida = new float[N];
+    private final float[] histRam = new float[N], histTempCpu = new float[N], histTempGpu = new float[N];
+    private int alertaTemp = 90;
+    private JSONObject widgetActual;
+
+    /** Botones tocables (multimedia) dibujados en el ultimo fotograma. */
+    private final java.util.ArrayList<RectF> zonas = new java.util.ArrayList<>();
+    private final java.util.ArrayList<String> acciones = new java.util.ArrayList<>();
+    private String pulsado;
+    private long pulsadoHasta;
+
+    public interface OyenteAccion { void onAccion(String accion); }
+    private OyenteAccion oyente;
+    public void setOyenteAccion(OyenteAccion o) { oyente = o; }
     private int cabeza;
     private int pagina;
     private String conexion = "";
@@ -94,6 +107,7 @@ public class PanelView extends View {
             PISTA = (TEXTO & 0x00FFFFFF) | 0x22000000;
         }
         cabecera = d.optBoolean("cabecera", true);
+        alertaTemp = d.optInt("alerta_temp", 90);
         JSONArray p = d.optJSONArray("paginas");
         if (p != null && p.length() > 0) paginas = p;
         if (paginas != null && pagina >= paginas.length()) pagina = 0;
@@ -120,6 +134,10 @@ public class PanelView extends View {
         histGpu[cabeza] = gpu != null ? (float) gpu.optDouble("uso", 0) : 0;
         histBajada[cabeza] = red != null ? (float) red.optDouble("bajada_kbs", 0) : 0;
         histSubida[cabeza] = red != null ? (float) red.optDouble("subida_kbs", 0) : 0;
+        JSONObject ram = datos.optJSONObject("ram");
+        histRam[cabeza] = ram != null ? (float) ram.optDouble("porcentaje", 0) : 0;
+        histTempCpu[cabeza] = cpu != null && !cpu.isNull("temp") ? (float) cpu.optDouble("temp", 0) : 0;
+        histTempGpu[cabeza] = gpu != null ? (float) gpu.optDouble("temp", 0) : 0;
         JSONObject d = datos.optJSONObject("diseno");
         if (d != null && d.optLong("version", 0) != versionDiseno) {
             versionDiseno = d.optLong("version", 0);
@@ -145,6 +163,8 @@ public class PanelView extends View {
     protected void onDraw(Canvas c) {
         int w = getWidth(), h = getHeight();
         c.drawColor(FONDO);
+        zonas.clear();
+        acciones.clear();
         // Anti-quemado: la pantalla esta encendida dia y noche, asi que todo el
         // contenido se desplaza un par de pixeles cada minuto (no se nota a simple vista).
         int paso = (int) ((System.currentTimeMillis() / 60000) % 4);
@@ -239,7 +259,16 @@ public class PanelView extends View {
             c.drawRoundRect(r, 10 * dp, 10 * dp, pRelleno);
             float pd = 10 * dp;
             tituloActual = wd.optString("titulo", "");
-            dibujarWidget(c, wd.optString("tipo", ""), x + pd, y + pd, tw - 2 * pd, th - 2 * pd);
+            widgetActual = wd;
+            String tipo = wd.optString("tipo", "");
+            dibujarWidget(c, tipo, x + pd, y + pd, tw - 2 * pd, th - 2 * pd);
+            // Alerta: borde rojo parpadeante si la temperatura se dispara
+            if (enAlerta(tipo) && (System.currentTimeMillis() / 1000) % 2 == 0) {
+                pTrazo.setColor(ALERTA);
+                pTrazo.setStrokeWidth(3 * dp);
+                r.set(x + 1.5f * dp, y + 1.5f * dp, x + tw - 1.5f * dp, y + th - 1.5f * dp);
+                c.drawRoundRect(r, 10 * dp, 10 * dp, pTrazo);
+            }
         }
         tituloActual = "";
     }
@@ -256,7 +285,255 @@ public class PanelView extends View {
             case "gpu_detalle": tarjetaGpuDetalle(c, ix, iy, iw, ih); break;
             case "ventiladores": tarjetaVentiladores(c, ix, iy, iw, ih); break;
             case "reloj": tarjetaReloj(c, ix, iy, iw, ih); break;
+            case "procesos": tarjetaProcesos(c, ix, iy, iw, ih); break;
+            case "bateria": tarjetaBateria(c, ix, iy, iw, ih); break;
+            case "multimedia": tarjetaMultimedia(c, ix, iy, iw, ih); break;
+            case "grafica": tarjetaGrafica(c, ix, iy, iw, ih); break;
         }
+    }
+
+    private float tempCpu() {
+        JSONObject cpu = s.optJSONObject("cpu");
+        return cpu != null && !cpu.isNull("temp") ? (float) cpu.optDouble("temp", 0) : 0;
+    }
+
+    private float tempGpu() {
+        JSONObject g = primeraGpu();
+        return g != null ? (float) g.optDouble("temp", 0) : 0;
+    }
+
+    private boolean enAlerta(String tipo) {
+        switch (tipo) {
+            case "cpu": return tempCpu() >= alertaTemp;
+            case "gpu": case "gpu_detalle": return tempGpu() >= alertaTemp;
+            case "temps": return Math.max(tempCpu(), tempGpu()) >= alertaTemp;
+            case "grafica": {
+                String m = widgetActual != null ? widgetActual.optString("metrica", "cpu") : "cpu";
+                return ("temp_cpu".equals(m) && tempCpu() >= alertaTemp)
+                        || ("temp_gpu".equals(m) && tempGpu() >= alertaTemp);
+            }
+            default: return false;
+        }
+    }
+
+    private void textoCentrado(Canvas c, String t, float x, float y, float w) {
+        pTexto.setTextAlign(Paint.Align.CENTER);
+        pTexto.setColor(TENUE);
+        pTexto.setTextSize(13 * dp);
+        c.drawText(encajar(t, w), x + w / 2, y, pTexto);
+    }
+
+    private void tarjetaProcesos(Canvas c, float x, float y, float w, float h) {
+        titulo(c, "Procesos", x, y, w);
+        JSONArray p = s.optJSONArray("procesos");
+        if (p == null || p.length() == 0) {
+            textoCentrado(c, "Calculando...", x, y + h / 2, w);
+            return;
+        }
+        float fila = Math.max(22 * dp, Math.min(30 * dp, (h - 22 * dp) / Math.max(1, p.length())));
+        float yy = y + 22 * dp;
+        float max = 1;
+        for (int i = 0; i < p.length(); i++) max = Math.max(max, (float) p.optJSONObject(i).optDouble("cpu", 0));
+        for (int i = 0; i < p.length() && yy + fila <= y + h + 6 * dp; i++) {
+            JSONObject o = p.optJSONObject(i);
+            float cpu = (float) o.optDouble("cpu", 0);
+            String valor = String.format(Locale.ROOT, "%.1f %%", cpu);
+            pTexto.setTextSize(12 * dp);
+            float anchoV = pTexto.measureText(valor);
+            pTexto.setTextAlign(Paint.Align.RIGHT);
+            pTexto.setColor(TEXTO);
+            c.drawText(valor, x + w, yy + 12 * dp, pTexto);
+            pTexto.setTextAlign(Paint.Align.LEFT);
+            pTexto.setColor(TEXTO);
+            c.drawText(encajar(o.optString("nombre", "?"), w - anchoV - 8 * dp), x, yy + 12 * dp, pTexto);
+            barra(c, x, yy + 16 * dp, w, 3 * dp, 100 * cpu / max, colorPorNivel(cpu, 25, 50));
+            yy += fila;
+        }
+    }
+
+    private void tarjetaBateria(Canvas c, float x, float y, float w, float h) {
+        titulo(c, "Batería", x, y, w);
+        JSONObject b = s.optJSONObject("bateria");
+        if (b == null) {
+            textoCentrado(c, "Este PC no tiene batería", x, y + h / 2, w);
+            return;
+        }
+        int pct = b.optInt("porcentaje", 0);
+        boolean cargando = b.optBoolean("cargando", false);
+        // Pila dibujada
+        float bw = Math.min(w * 0.7f, (h - 50 * dp) * 2.2f), bh = bw / 2.2f;
+        float bx = x + (w - bw) / 2 - 3 * dp, by = y + 22 * dp + (h - 22 * dp - bh - 24 * dp) / 2;
+        pTrazo.setColor(TENUE);
+        pTrazo.setStrokeWidth(2 * dp);
+        r.set(bx, by, bx + bw, by + bh);
+        c.drawRoundRect(r, 6 * dp, 6 * dp, pTrazo);
+        pRelleno.setColor(TENUE);
+        r.set(bx + bw, by + bh * 0.3f, bx + bw + 5 * dp, by + bh * 0.7f);
+        c.drawRoundRect(r, 2 * dp, 2 * dp, pRelleno);
+        int col = cargando ? ACENTO : pct <= 15 ? ALERTA : pct <= 30 ? AVISO : ACENTO;
+        pRelleno.setColor(col);
+        float in = 4 * dp;
+        r.set(bx + in, by + in, bx + in + (bw - 2 * in) * pct / 100f, by + bh - in);
+        c.drawRoundRect(r, 3 * dp, 3 * dp, pRelleno);
+        pTexto.setTextAlign(Paint.Align.CENTER);
+        pTexto.setColor(TEXTO);
+        pTexto.setTextSize(bh * 0.45f);
+        c.drawText(pct + "%", bx + bw / 2, by + bh / 2 + bh * 0.16f, pTexto);
+        String estado;
+        if (cargando) estado = pct >= 100 ? "Cargada · enchufada" : "Cargando";
+        else if (!b.isNull("minutos")) {
+            int min = b.optInt("minutos", 0);
+            estado = (min / 60) + " h " + (min % 60) + " min restantes";
+        } else estado = "Con batería";
+        pTexto.setColor(TENUE);
+        pTexto.setTextSize(12 * dp);
+        c.drawText(encajar(estado, w), x + w / 2, by + bh + 20 * dp, pTexto);
+    }
+
+    private void tarjetaMultimedia(Canvas c, float x, float y, float w, float h) {
+        titulo(c, "Multimedia", x, y, w);
+        JSONObject m = s.optJSONObject("medios");
+        String tituloM = m != null ? m.optString("titulo", "") : "";
+        String artista = m != null ? m.optString("artista", "") : "";
+        boolean sonando = m != null && "reproduciendo".equals(m.optString("estado", ""));
+        float top = y + 24 * dp;
+        if (!tituloM.isEmpty()) {
+            pTexto.setTextAlign(Paint.Align.LEFT);
+            pTexto.setColor(TEXTO);
+            pTexto.setTextSize(16 * dp);
+            c.drawText(encajar(tituloM, w), x, top + 14 * dp, pTexto);
+            pTexto.setColor(TENUE);
+            pTexto.setTextSize(12 * dp);
+            String sub = artista;
+            String app = m.optString("app", "");
+            if (!app.isEmpty()) sub = sub.isEmpty() ? app : sub + "  ·  " + app;
+            c.drawText(encajar(sub, w), x, top + 32 * dp, pTexto);
+            top += 40 * dp;
+        }
+        // Dos filas de botones: anterior / play-pausa / siguiente y volumen - / silencio / +
+        float zonaH = y + h - top;
+        float filaH = Math.min(zonaH / 2f, w / 3f);
+        float b = Math.min(filaH - 6 * dp, w / 3f - 8 * dp);
+        String[][] filas = {{"anterior", "play", "siguiente"}, {"vol_menos", "silencio", "vol_mas"}};
+        for (int f = 0; f < 2; f++) {
+            float cy = top + filaH * f + filaH / 2;
+            for (int i = 0; i < 3; i++) {
+                float cx = x + w * (i + 0.5f) / 3f;
+                String acc = filas[f][i];
+                boolean activo = acc.equals(pulsado) && System.currentTimeMillis() < pulsadoHasta;
+                r.set(cx - b / 2, cy - b / 2 * (f == 0 ? 1f : 0.8f), cx + b / 2, cy + b / 2 * (f == 0 ? 1f : 0.8f));
+                pRelleno.setColor(activo ? ACENTO : PISTA);
+                c.drawRoundRect(r, b / 2, b / 2, pRelleno);
+                zonas.add(new RectF(r));
+                acciones.add(acc);
+                icono(c, acc, cx, cy, b * 0.22f, activo ? FONDO : TEXTO, sonando);
+            }
+        }
+    }
+
+    /** Iconos dibujados con formas (sin depender de fuentes con emojis, que en Android 6 fallan). */
+    private void icono(Canvas c, String acc, float cx, float cy, float t, int color, boolean sonando) {
+        pRelleno.setColor(color);
+        pTrazo.setColor(color);
+        pTrazo.setStrokeWidth(Math.max(2 * dp, t * 0.25f));
+        ruta.reset();
+        switch (acc) {
+            case "play":
+                if (sonando) {   // pausa
+                    c.drawRect(cx - t * 0.8f, cy - t, cx - t * 0.25f, cy + t, pRelleno);
+                    c.drawRect(cx + t * 0.25f, cy - t, cx + t * 0.8f, cy + t, pRelleno);
+                } else {
+                    ruta.moveTo(cx - t * 0.6f, cy - t); ruta.lineTo(cx + t, cy); ruta.lineTo(cx - t * 0.6f, cy + t);
+                    ruta.close(); c.drawPath(ruta, pRelleno);
+                }
+                break;
+            case "siguiente":
+            case "anterior": {
+                float d = "siguiente".equals(acc) ? 1 : -1;
+                ruta.moveTo(cx - d * t, cy - t * 0.8f); ruta.lineTo(cx + d * t * 0.5f, cy); ruta.lineTo(cx - d * t, cy + t * 0.8f);
+                ruta.close(); c.drawPath(ruta, pRelleno);
+                float bx = cx + d * t * 0.6f;
+                c.drawRect(Math.min(bx, bx + d * t * 0.3f), cy - t * 0.8f, Math.max(bx, bx + d * t * 0.3f), cy + t * 0.8f, pRelleno);
+                break;
+            }
+            default: {   // altavoz
+                float ox = cx - t * 0.4f;
+                ruta.moveTo(ox - t * 0.6f, cy - t * 0.35f); ruta.lineTo(ox - t * 0.15f, cy - t * 0.35f);
+                ruta.lineTo(ox + t * 0.4f, cy - t * 0.85f); ruta.lineTo(ox + t * 0.4f, cy + t * 0.85f);
+                ruta.lineTo(ox - t * 0.15f, cy + t * 0.35f); ruta.lineTo(ox - t * 0.6f, cy + t * 0.35f);
+                ruta.close(); c.drawPath(ruta, pRelleno);
+                float sx = ox + t * 0.8f;
+                if ("silencio".equals(acc)) {
+                    c.drawLine(sx, cy - t * 0.4f, sx + t * 0.8f, cy + t * 0.4f, pTrazo);
+                    c.drawLine(sx, cy + t * 0.4f, sx + t * 0.8f, cy - t * 0.4f, pTrazo);
+                } else {
+                    c.drawLine(sx, cy, sx + t * 0.9f, cy, pTrazo);
+                    if ("vol_mas".equals(acc)) c.drawLine(sx + t * 0.45f, cy - t * 0.45f, sx + t * 0.45f, cy + t * 0.45f, pTrazo);
+                }
+            }
+        }
+    }
+
+    private void tarjetaGrafica(Canvas c, float x, float y, float w, float h) {
+        String m = widgetActual != null ? widgetActual.optString("metrica", "cpu") : "cpu";
+        String nombre, valor;
+        float[] hist;
+        float max;
+        int color = ACENTO;
+        switch (m) {
+            case "gpu": nombre = "GPU"; hist = histGpu; max = 100; valor = Math.round(hist[cabeza]) + " %"; color = SECUNDARIO; break;
+            case "ram": nombre = "Memoria"; hist = histRam; max = 100; valor = Math.round(hist[cabeza]) + " %"; break;
+            case "temp_cpu": nombre = "Temperatura CPU"; hist = histTempCpu; max = 100; valor = Math.round(hist[cabeza]) + " °C"; color = colorPorNivel(hist[cabeza], 75, alertaTemp); break;
+            case "temp_gpu": nombre = "Temperatura GPU"; hist = histTempGpu; max = 100; valor = Math.round(hist[cabeza]) + " °C"; color = colorPorNivel(hist[cabeza], 75, alertaTemp); break;
+            case "red": nombre = "Red (bajada)"; hist = histBajada; max = 0; valor = velocidad(hist[cabeza]); break;
+            default: nombre = "CPU"; hist = histCpu; max = 100; valor = Math.round(hist[cabeza]) + " %";
+        }
+        titulo(c, nombre, x, y, w);
+        pTexto.setTextAlign(Paint.Align.RIGHT);
+        pTexto.setColor(TEXTO);
+        pTexto.setTextSize(Math.min(28 * dp, h * 0.18f));
+        c.drawText(valor, x + w, y + Math.min(28 * dp, h * 0.18f), pTexto);
+        float gy = y + Math.min(28 * dp, h * 0.18f) + 10 * dp;
+        float gh = y + h - gy;
+        // Relleno suave bajo la linea
+        if (max <= 0) { for (float v : hist) max = Math.max(max, v); if (max <= 0) max = 1; }
+        ruta.reset();
+        ruta.moveTo(x, gy + gh);
+        for (int i = 0; i < N; i++) {
+            float v = hist[(cabeza + 1 + i) % N];
+            ruta.lineTo(x + w * i / (N - 1), gy + gh - gh * Math.min(v / max, 1f));
+        }
+        ruta.lineTo(x + w, gy + gh);
+        ruta.close();
+        pRelleno.setColor((color & 0x00FFFFFF) | 0x33000000);
+        c.drawPath(ruta, pRelleno);
+        linea(c, hist, x, gy, w, gh, max, color);
+        pTexto.setTextAlign(Paint.Align.LEFT);
+        pTexto.setColor(TENUE);
+        pTexto.setTextSize(10 * dp);
+        c.drawText("últimos 60 s", x, y + h, pTexto);
+    }
+
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent e) {
+        int a = e.getActionMasked();
+        if (a == android.view.MotionEvent.ACTION_DOWN || a == android.view.MotionEvent.ACTION_UP) {
+            // Ojo: el lienzo esta desplazado por el anti-quemado; 2 dp no cambian el acierto.
+            for (int i = 0; i < zonas.size(); i++) {
+                RectF z = zonas.get(i);
+                if (z.contains(e.getX(), e.getY())) {
+                    if (a == android.view.MotionEvent.ACTION_UP) {
+                        pulsado = acciones.get(i);
+                        pulsadoHasta = System.currentTimeMillis() + 300;
+                        if (oyente != null) oyente.onAccion(pulsado);
+                        invalidate();
+                        postInvalidateDelayed(320);
+                    }
+                    return true;
+                }
+            }
+        }
+        return super.onTouchEvent(e);
     }
 
     private void tarjetaReloj(Canvas c, float x, float y, float w, float h) {
