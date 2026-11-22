@@ -36,7 +36,7 @@ set "PYW=%PY:python.exe=pythonw.exe%"
 if defined LANZADOR set "PYW=pyw -3"
 
 echo Preparando PulsePC (solo la primera vez tarda un poco)...
-%PY% -m pip install --quiet --disable-pip-version-check psutil pystray pillow
+%PY% -m pip install --quiet --disable-pip-version-check psutil pystray pillow pychromecast
 if errorlevel 1 (
   echo No se pudieron instalar las dependencias. Revisa tu conexion a Internet.
   pause

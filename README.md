@@ -53,6 +53,16 @@ Con el agente abierto, abre **`agente/personalizar.bat`** (o `http://localhost:4
 - Se guarda solo en `agente/pulsopc_config.json` y el móvil lo aplica en un segundo, sin reiniciar nada.
 - Por seguridad, el diseño solo se puede cambiar desde el propio PC.
 
+### Enviar a un Google Nest Hub
+
+PulsePC también se puede ver en un **Nest Hub** (o cualquier pantalla con Chromecast), con el mismo diseño que el móvil.
+No se envía solo: tú eliges cuándo desde el icono de la bandeja, en *Enviar al Nest Hub → Enviar a …*, y lo quitas con *Dejar de enviar*.
+
+- El Nest Hub tiene que estar en la misma Wi‑Fi que el PC (y el firewall debe permitir redes privadas).
+- Las páginas se pasan solas cada 15 s, porque el Nest Hub no deja tocar las páginas enviadas.
+- Si el Nest Hub la cierra por su cuenta, PulsePC la vuelve a abrir mientras no pulses *Dejar de enviar*.
+- La misma pantalla se ve en el navegador en `http://localhost:47801/pantalla`.
+
 ### Móvil fijo dentro del PC
 
 - **Anti-quemado:** el contenido se desplaza un par de píxeles cada minuto.

@@ -42,6 +42,7 @@ import pystray  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 import pulsopc_agente as agente  # noqa: E402
+import pulsopc_cast as cast  # noqa: E402
 
 NOMBRE_RUN = "PulsePC"
 NOMBRE_ANTIGUO = "PulsoPC"   # nombre anterior de la app (tarea y clave Run)
@@ -250,6 +251,10 @@ def main():
         poner_arranque(not arranque_activado())
 
     def salir(icon, item):
+        try:
+            cast.parar()
+        except Exception:
+            pass
         agente._cerrar_procesos()
         icon.stop()
 
@@ -266,6 +271,55 @@ def main():
     def avisar_local(t):
         agente.estado["avisos"].append(t)
 
+    # ---- Enviar a una pantalla (Nest Hub): solo cuando el usuario lo pide ----
+    def buscar_pantallas(icon=None, item=None):
+        def _b():
+            try:
+                cast.buscar()
+            except Exception as e:
+                logging.info("Buscar pantallas: %s", e)
+                cast.estado["error"] = str(e)
+            ic.update_menu()
+        threading.Thread(target=_b, daemon=True).start()
+        if icon is not None:
+            ic.update_menu()
+
+    def enviar_a(uuid):
+        def _accion(icon, item):
+            def _e():
+                try:
+                    cast.enviar(uuid, "http://%s:%d/pantalla" % (agente.ip_local(), agente.PUERTO_HTTP))
+                    avisar_local("Enviando PulsePC a %s." % cast.estado["enviando"])
+                except Exception as e:
+                    logging.info("Enviar a pantalla: %s", e)
+                    avisar_local("No pude enviar a la pantalla: %s" % e)
+                icon.update_menu()
+            threading.Thread(target=_e, daemon=True).start()
+        return _accion
+
+    def dejar_de_enviar(icon, item):
+        def _p():
+            cast.parar()
+            icon.update_menu()
+        threading.Thread(target=_p, daemon=True).start()
+
+    def opciones_pantalla():
+        est = cast.estado
+        if not cast.disponible():
+            yield pystray.MenuItem("Falta instalar pychromecast (abre iniciar_agente.bat)", None, enabled=False)
+            return
+        if est["enviando"]:
+            yield pystray.MenuItem("Dejar de enviar a %s" % est["enviando"], dejar_de_enviar)
+            yield pystray.Menu.SEPARATOR
+        for p in est["pantallas"]:
+            yield pystray.MenuItem("Enviar a %s" % p["nombre"], enviar_a(p["uuid"]),
+                                   checked=(lambda it, n=p["nombre"]: cast.estado["enviando"] == n), radio=True)
+        if est["buscando"]:
+            yield pystray.MenuItem("Buscando pantallas…", None, enabled=False)
+        elif est["buscado"] and not est["pantallas"]:
+            yield pystray.MenuItem("No encuentro ninguna pantalla en tu Wi-Fi", None, enabled=False)
+        yield pystray.MenuItem("Buscar pantallas otra vez", buscar_pantallas, enabled=not est["buscando"])
+
     menu = pystray.Menu(
         pystray.MenuItem(lambda it: agente.estado_lhm["texto"], None, enabled=False),
         pystray.MenuItem("Reiniciar como administrador (temperatura de CPU)", reiniciar_admin,
@@ -274,7 +328,9 @@ def main():
                          visible=lambda it: es_windows and agente.es_admin() and not agente.pawnio_instalado()),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Personalizar el móvil", lambda i, it: webbrowser.open(url + "/editor"), default=True),
-        pystray.MenuItem("Ver panel web", lambda i, it: webbrowser.open(url + "/")),
+        pystray.MenuItem("Ver panel web", lambda i, it: webbrowser.open(url + "/pantalla")),
+        pystray.MenuItem(lambda it: ("Nest Hub: enviando a %s" % cast.estado["enviando"]) if cast.estado["enviando"]
+                         else "Enviar al Nest Hub", pystray.Menu(opciones_pantalla)),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Arrancar con Windows", alternar_arranque,
                          checked=lambda it: arranque_activado(), visible=es_windows),
@@ -284,6 +340,7 @@ def main():
         pystray.MenuItem("Salir de PulsePC", salir),
     )
     icon = pystray.Icon("PulsePC", ICONO_OFF, "PulsePC · esperando al móvil", menu)
+    ic = icon
 
     def vigilar():
         conectado = None
@@ -308,6 +365,9 @@ def main():
     def al_arrancar(icon):
         icon.visible = True
         threading.Thread(target=vigilar, daemon=True).start()
+        # Solo busca qué pantallas hay (no envía nada) para tener la lista lista en el menú.
+        if cast.disponible():
+            buscar_pantallas()
         logging.info("PulsePC en marcha en la bandeja.")
 
     icon.run(setup=al_arrancar)

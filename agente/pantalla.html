@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PulsePC</title>
+<!-- Pantalla para enviar a un Nest Hub (u otra pantalla Chromecast) o abrir en cualquier navegador.
+     Dibuja el mismo diseno que el movil (paginas, widgets, tema). Las paginas se pasan solas,
+     porque las paginas enviadas al Nest Hub no responden al tacto. -->
+<style>
+:root{--fondo:#0E1116;--tarjeta:#171B22;--acento:#3EC7A0;--sec:#5B9BF0;--texto:#E6E6E6}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--fondo);color:var(--texto);
+  font-family:"Google Sans",Roboto,"Segoe UI",sans-serif}
+#raiz{position:absolute;inset:0;display:flex;flex-direction:column;padding:2vh 2vw;gap:1.6vh;transition:transform 2s}
+#cab{display:flex;justify-content:space-between;align-items:baseline;font-size:3.2vh;opacity:.75}
+#cab b{font-weight:500}
+#rejilla{flex:1;display:grid;gap:1.6vh;min-height:0}
+.w{background:var(--tarjeta);border-radius:2vh;padding:1.8vh 1.6vw;display:flex;flex-direction:column;
+  min-width:0;min-height:0;overflow:hidden;border:.4vh solid transparent}
+.w.alerta{animation:parpadeo 1s infinite}
+@keyframes parpadeo{50%{border-color:#E5484D;background:#3a1517}}
+.c{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0}
+.t{font-size:2.6vh;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:.6vh}
+.g{font-size:7vh;font-weight:500;line-height:1.05;white-space:nowrap}
+.g small{font-size:.45em;opacity:.7;font-weight:400}
+.s{font-size:2.6vh;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b{height:1.2vh;background:rgba(255,255,255,.08);border-radius:1vh;overflow:hidden;margin:.8vh 0}
+.b i{display:block;height:100%;background:var(--acento);border-radius:1vh;transition:width .8s}
+.l{display:flex;justify-content:space-between;gap:1vw;font-size:2.6vh;line-height:1.5}
+.l span:first-child{opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.l span:last-child{white-space:nowrap}
+.cores{flex:1;display:flex;align-items:flex-end;gap:.3vw;min-height:0}
+.cores i{flex:1;background:var(--acento);border-radius:.5vh .5vh 0 0;min-height:2px;transition:height .8s}
+.med{display:flex;gap:1.5vw;align-items:center;flex:1;min-height:0}
+.med img{height:100%;max-height:22vh;aspect-ratio:1;object-fit:cover;border-radius:1.2vh}
+.med .g{font-size:4vh;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+canvas{flex:1;width:100%;min-height:0}
+.reloj{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center}
+.reloj .g{font-size:12vh}
+#puntos{position:absolute;bottom:1vh;left:0;right:0;text-align:center;font-size:2vh;opacity:.5;letter-spacing:.6vw}
+#espera{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:4vh;opacity:.5}
+</style></head><body>
+<div id="raiz"><div id="cab"><b id="equipo">PulsePC</b><span id="hora"></span></div><div id="rejilla"></div></div>
+<div id="puntos"></div><div id="espera">PulsePC · esperando al PC…</div>
+<script>
+var S=null,D=null,pag=0,cambio=Date.now(),hist={},HMAX=120,ultOK=0,versionD=null;
+function e(x){return String(x==null?"":x).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function n(x,d){return x==null||isNaN(x)?"–":Number(x).toFixed(d||0)}
+function bar(p,c){return '<div class="b"><i style="width:'+Math.max(0,Math.min(100,p||0))+'%'+(c?';background:'+c:'')+'"></i></div>'}
+function vel(k){return k==null?"–":k>=1024?n(k/1024,1)+" MB/s":n(k)+" KB/s"}
+function li(a,b){return '<div class="l"><span>'+e(a)+'</span><span>'+e(b)+'</span></div>'}
+function gpu0(){return (S.gpu&&S.gpu[0])||null}
+function valor(m){
+  if(m=="cpu")return S.cpu&&S.cpu.uso; if(m=="ram")return S.ram&&S.ram.porcentaje;
+  if(m=="gpu"){var g=gpu0();return g&&g.uso} if(m=="temp_cpu")return S.cpu&&S.cpu.temp;
+  if(m=="temp_gpu"){var g2=gpu0();return g2&&g2.temp} if(m=="red")return S.red&&(S.red.bajada_kbs+S.red.subida_kbs);
+}
+var NOMBRE_M={cpu:"CPU",gpu:"GPU",ram:"Memoria",temp_cpu:"Temperatura CPU",temp_gpu:"Temperatura GPU",red:"Red"};
+function guardarHist(){for(var m in NOMBRE_M){var v=valor(m);if(v==null)continue;(hist[m]=hist[m]||[]).push(v);if(hist[m].length>HMAX)hist[m].shift()}}
+
+var W={
+ cpu:function(){var c=S.cpu||{};return{t:"CPU",a:c.temp>=D.alerta_temp,h:'<div class="g">'+n(c.uso)+'<small> %</small></div>'+bar(c.uso)+
+   '<div class="s">'+(c.temp!=null?n(c.temp)+' °C · ':'')+(c.freq_mhz?n(c.freq_mhz/1000,2)+' GHz':'')+(c.consumo_w!=null?' · '+n(c.consumo_w)+' W':'')+'</div>'}},
+ ram:function(){var r=S.ram||{};return{t:"Memoria",h:'<div class="g">'+n(r.porcentaje)+'<small> %</small></div>'+bar(r.porcentaje,"var(--sec)")+
+   '<div class="s">'+n(r.usada_gb,1)+' / '+n(r.total_gb,1)+' GB</div>'}},
+ gpu:function(){var g=gpu0();if(!g)return{t:"GPU",h:'<div class="s">Sin GPU NVIDIA</div>'};
+   return{t:g.nombre||"GPU",a:g.temp>=D.alerta_temp,h:'<div class="g">'+n(g.uso)+'<small> %</small></div>'+bar(g.uso)+
+   '<div class="s">'+n(g.temp)+' °C · '+n(g.vram_usada_mb/1024,1)+' / '+n(g.vram_total_mb/1024,1)+' GB</div>'}},
+ gpu_detalle:function(){var g=gpu0();if(!g)return{t:"GPU",h:'<div class="s">Sin GPU NVIDIA</div>'};
+   return{t:(g.nombre||"GPU")+" · detalle",a:g.temp>=D.alerta_temp,h:li("Núcleo",n(g.reloj_mhz)+" MHz")+li("Memoria",n(g.reloj_mem_mhz)+" MHz")+
+   li("Consumo",n(g.consumo_w)+" / "+n(g.limite_w)+" W")+li("Ventilador",n(g.ventilador)+" %")+li("Temperatura",n(g.temp)+" °C")}},
+ temps:function(){var h="",t=S.temperaturas||[];for(var i=0;i<t.length&&i<8;i++)h+=li(t[i].sensor==t[i].dispositivo?t[i].sensor:t[i].dispositivo+" · "+t[i].sensor,n(t[i].valor)+" °C");
+   return{t:"Temperaturas",h:h||'<div class="s">Sin sensores</div>'}},
+ red:function(){var r=S.red||{};return{t:"Red",h:'<div class="g" style="font-size:5vh">↓ '+vel(r.bajada_kbs)+'</div><div class="g" style="font-size:5vh;color:var(--sec)">↑ '+vel(r.subida_kbs)+'</div>'}},
+ disco:function(){var d=S.disco||{},h=li("Lectura",vel(d.lectura_kbs))+li("Escritura",vel(d.escritura_kbs)),u=d.unidades||[];
+   for(var i=0;i<u.length&&i<3;i++)h+=li(u[i].unidad,n(u[i].usado_gb)+" / "+n(u[i].total_gb)+" GB")+bar(u[i].porcentaje,"var(--sec)");return{t:"Discos",h:h}},
+ nucleos:function(){var c=(S.cpu&&S.cpu.nucleos)||[],h="";for(var i=0;i<c.length;i++)h+='<i style="height:'+Math.max(1,c[i])+'%"></i>';
+   return{t:"Núcleos ("+c.length+")",h:'<div class="cores">'+h+'</div>'}},
+ ventiladores:function(){var h="",f=S.ventiladores||[],p=S.consumos||[];for(var i=0;i<f.length&&i<5;i++)h+=li(f[i].sensor,n(f[i].rpm)+" rpm");
+   for(var j=0;j<p.length&&j<4;j++)h+=li(p[j].dispositivo+" · "+p[j].sensor,n(p[j].w)+" W");return{t:"Ventiladores y consumo",h:h||'<div class="s">Sin datos</div>'}},
+ reloj:function(){var d=new Date();return{t:"",h:'<div class="reloj"><div class="g">'+d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})+'</div><div class="s">'+
+   d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})+'</div></div>'}},
+ procesos:function(){var p=S.procesos||[],h="";for(var i=0;i<p.length&&i<7;i++)h+=li(p[i].nombre,n(p[i].cpu)+" %");return{t:"Procesos",h:h||'<div class="s">–</div>'}},
+ bateria:function(){var b=S.bateria;if(!b)return{t:"Batería",h:'<div class="s">Sin batería</div>'};
+   return{t:"Batería",h:'<div class="g">'+n(b.porcentaje)+'<small> %</small></div>'+bar(b.porcentaje)+'<div class="s">'+(b.cargando?"Cargando":b.minutos?Math.floor(b.minutos/60)+" h "+(b.minutos%60)+" min":"")+'</div>'}},
+ multimedia:function(){var m=S.medios||{};if(!m.titulo)return{t:"Multimedia",h:'<div class="s">No suena nada</div>'};
+   return{t:"Suena ahora"+(m.app?" · "+m.app:""),h:'<div class="med">'+(m.portada_id?'<img src="/portada?id='+encodeURIComponent(m.portada_id)+'">':'')+
+   '<div style="min-width:0"><div class="g">'+e(m.titulo)+'</div><div class="s">'+e(m.artista||"")+(m.estado=="pausa"?" · en pausa":"")+'</div></div></div>'}},
+ grafica:function(w){var m=w.metrica||"cpu",v=valor(m);return{t:NOMBRE_M[m],a:(m=="temp_cpu"||m=="temp_gpu")&&v>=D.alerta_temp,graf:m,
+   h:'<div class="g" style="font-size:4.5vh">'+(m=="red"?vel(v):n(v)+(m.indexOf("temp")==0?" °C":" %"))+'</div><canvas></canvas>'}}
+};
+
+function pintarGrafica(cv,m){var r=cv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=r.width*dpr;cv.height=r.height*dpr;
+  var x=cv.getContext("2d"),h=hist[m]||[];if(h.length<2)return;var max=m=="red"?Math.max.apply(null,h.concat([100])):100;
+  var col=getComputedStyle(document.documentElement).getPropertyValue("--acento");x.beginPath();
+  for(var i=0;i<h.length;i++){var px=cv.width*i/(HMAX-1),py=cv.height*(1-h[i]/max);i?x.lineTo(px,py):x.moveTo(px,py)}
+  x.strokeStyle=col;x.lineWidth=3*dpr;x.stroke();x.lineTo(cv.width*(h.length-1)/(HMAX-1),cv.height);x.lineTo(0,cv.height);x.closePath();
+  x.globalAlpha=.18;x.fillStyle=col;x.fill()}
+
+function pintar(){
+  if(!S||!D)return;var ps=D.paginas||[];if(!ps.length)return;
+  if(ps.length>1&&Date.now()-cambio>15000){pag=(pag+1)%ps.length;cambio=Date.now()}
+  if(pag>=ps.length)pag=0;var p=ps[pag],rj=document.getElementById("rejilla");
+  rj.style.gridTemplateColumns="repeat("+p.columnas+",minmax(0,1fr))";rj.style.gridTemplateRows="repeat("+p.filas+",minmax(0,1fr))";
+  var h="",grafs=[];
+  for(var i=0;i<p.widgets.length;i++){var w=p.widgets[i],f=W[w.tipo];if(!f)continue;var r;try{r=f(w)}catch(err){r={t:w.tipo,h:""}}
+    if(r.graf)grafs.push([i,r.graf]);
+    h+='<div class="w'+(r.a?' alerta':'')+'" style="grid-column:span '+w.ancho+';grid-row:span '+w.alto+'">'+
+       ((w.titulo||r.t)?'<div class="t">'+e(w.titulo||r.t)+'</div>':'')+'<div class="c">'+r.h+'</div></div>'}
+  rj.innerHTML=h;
+  for(var j=0;j<grafs.length;j++)pintarGrafica(rj.children[grafs[j][0]].querySelector("canvas"),grafs[j][1]);
+  document.getElementById("cab").style.display=D.cabecera?"flex":"none";
+  document.getElementById("equipo").textContent=S.equipo||"PulsePC";
+  document.getElementById("hora").textContent=new Date().toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
+  var pt="";for(var k=0;k<ps.length&&ps.length>1;k++)pt+=k==pag?"●":"○";document.getElementById("puntos").textContent=pt;
+}
+function aplicarTema(){if(!D||D.version===versionD)return;versionD=D.version;var t=D.tema||{},s=document.documentElement.style;
+  s.setProperty("--fondo",t.fondo);s.setProperty("--tarjeta",t.tarjeta);s.setProperty("--acento",t.acento);s.setProperty("--sec",t.secundario);s.setProperty("--texto",t.texto)}
+function pedir(){var r=new XMLHttpRequest();r.open("GET","/stats?pantalla=1");r.timeout=4000;
+  r.onload=function(){try{var s=JSON.parse(r.responseText);if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar()}catch(x){}};r.send()}
+setInterval(pedir,1000);pedir();
+// Sin datos 30 s: se oscurece y avisa. Anti-quemado: se mueve un poco cada minuto.
+setInterval(function(){var sin=Date.now()-ultOK>30000;document.getElementById("espera").style.display=sin?"flex":"none";
+  document.getElementById("raiz").style.opacity=sin?0:1},2000);
+setInterval(function(){document.getElementById("raiz").style.transform="translate("+(Math.round(Math.random()*6)-3)+"px,"+(Math.round(Math.random()*6)-3)+"px)"},60000);
+</script></body></html>

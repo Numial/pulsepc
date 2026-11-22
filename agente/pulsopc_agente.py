@@ -710,6 +710,7 @@ DISENO_POR_DEFECTO = {
 
 RUTA_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsopc_config.json")
 RUTA_EDITOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor.html")
+RUTA_PANTALLA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pantalla.html")
 _diseno = {"valor": None, "lock": threading.Lock()}
 
 
@@ -842,7 +843,9 @@ class Manejador(BaseHTTPRequestHandler):
             ip = self.client_address[0]
             local = ip.startswith("127.") or ip == "::1"
             del_pc = local or ip == ip_local()
-            if not (del_pc and "Mozilla" in self.headers.get("User-Agent", "")):
+            # La pantalla del Nest Hub tampoco es el movil: pide /stats?pantalla=1.
+            pantalla = "pantalla=1" in self.path
+            if not pantalla and not (del_pc and "Mozilla" in self.headers.get("User-Agent", "")):
                 _ultimo["pedido"] = time.time()
                 _ultimo["via"] = "USB" if local else "Wi-Fi"
             with _ultimo["lock"]:
@@ -867,6 +870,12 @@ class Manejador(BaseHTTPRequestHandler):
                     self._enviar(200, f.read(), "text/html; charset=utf-8")
             except OSError:
                 self.send_error(404, "No encuentro editor.html junto al agente")
+        elif ruta == "/pantalla":
+            try:
+                with open(RUTA_PANTALLA, "rb") as f:
+                    self._enviar(200, f.read(), "text/html; charset=utf-8")
+            except OSError:
+                self.send_error(404, "No encuentro pantalla.html junto al agente")
         elif ruta in ("/", "/index.html"):
             self._enviar(200, PANEL_HTML.encode(), "text/html; charset=utf-8")
         else:
