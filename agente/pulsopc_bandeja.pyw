@@ -376,6 +376,13 @@ def main():
                     cast.reiniciar(uuid)
                     avisar_local(tr("Reiniciando %s. Cuando vuelva a encenderse (1-2 min), envíale PulsePC otra vez.",
                                     "Restarting %s. When it is back on (1-2 min), send PulsePC to it again.") % nombre)
+                except PermissionError:
+                    avisar_local(tr("%s no deja que otros programas lo reinicien (lo bloquea Google). "
+                                    "Desenchúfalo 10 s, o reinícialo desde la app Google Home: "
+                                    "dispositivo → Ajustes → ⋮ → Reiniciar.",
+                                    "%s does not let other programs restart it (Google blocks it). "
+                                    "Unplug it for 10 s, or restart it from the Google Home app: "
+                                    "device → Settings → ⋮ → Reboot.") % nombre)
                 except Exception as e:
                     avisar_local(tr("%s no acepta el reinicio por la red (%s). Desenchúfalo 10 s y vuelve a enchufarlo.",
                                     "%s refused the network restart (%s). Unplug it for 10 s and plug it back in.")

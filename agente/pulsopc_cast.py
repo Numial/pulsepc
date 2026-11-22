@@ -209,4 +209,7 @@ def reiniciar(uuid):
         except Exception as e:
             ultimo = e
             logging.info("Reiniciar %s por %s: %r", nombre, url, e)
+    if getattr(ultimo, "code", None) in (401, 403):
+        # Los Nest Hub con firmware reciente solo aceptan el reinicio desde la app Google Home.
+        raise PermissionError("firmware")
     raise RuntimeError(str(ultimo))

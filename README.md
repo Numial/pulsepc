@@ -66,7 +66,7 @@ No se envía solo: tú eliges cuándo desde el icono de la bandeja, en *Enviar a
 - Tiene **su propio diseño**, aparte del del móvil: en el editor (*Personalizar el Nest Hub* en el icono, o la pestaña *Nest Hub* del editor) eliges páginas, widgets y colores igual que para el móvil.
 - Como el Nest Hub no deja tocar las páginas enviadas, en el editor eliges si se **queda fija una página** o si se pasan solas (y cada cuántos segundos).
 - Si el Nest Hub la cierra por su cuenta, PulsePC la vuelve a abrir mientras no pulses *Dejar de enviar*.
-- Si el Nest Hub se queda colgado y no recibe nada, en *Enviar al Nest Hub → Reiniciar …* lo reinicias por la red (pide confirmación). Si el aparato no lo acepta, desenchúfalo 10 s.
+- Si el Nest Hub se queda colgado y no recibe nada, en *Enviar al Nest Hub → Reiniciar …* lo reinicias por la red (pide confirmación). Los Nest Hub con firmware reciente no lo permiten: entonces reinícialo desde la app Google Home o desenchúfalo 10 s.
 - La misma pantalla se ve en el navegador en `http://localhost:47801/pantalla`.
 
 ### Móvil fijo dentro del PC
