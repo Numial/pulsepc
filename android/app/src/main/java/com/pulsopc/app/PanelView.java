@@ -783,6 +783,9 @@ public class PanelView extends View {
             pTexto.setColor(TENUE);
             pTexto.setTextSize(Math.max(10 * dp, radio * 0.2f));
             // A esa altura el anillo esta a +-0.8 radios del centro: se deja margen para no tocarlo.
+            // Si no cabe entero (p. ej. "57 °C  ·  1.62 GHz" con letra ancha), se queda
+            // solo la primera parte en vez de cortarla a medias.
+            if (pTexto.measureText(sub) > radio * 1.3f && sub.contains("  ·  ")) sub = sub.substring(0, sub.indexOf("  ·  "));
             c.drawText(encajar(sub, radio * 1.3f), cx, cy + radio * 0.6f, pTexto);
         }
     }
