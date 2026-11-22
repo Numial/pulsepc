@@ -12,8 +12,9 @@ android {
         targetSdk 34
         // GitHub compila la app en cada cambio y le pone un numero de version mayor
         // (-PcodigoVersion): asi PulsePC sabe si el movil tiene una version antigua.
-        versionCode (project.findProperty('codigoVersion') ?: '8') as int
-        versionName '0.8' + (project.hasProperty('codigoVersion') ? '.' + project.findProperty('codigoVersion') : '')
+        def codigo = project.findProperty('codigoVersion')
+        versionCode Integer.parseInt((codigo ?: '8').toString())
+        versionName codigo ? "${versionBase}.${codigo}" : versionBase
     }
 
     // Misma firma en todos los PCs y en GitHub: si no, Android no deja actualizar la app

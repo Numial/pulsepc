@@ -32,7 +32,7 @@ jobs:
           CODIGO=$((100 + GITHUB_RUN_NUMBER))
           chmod +x gradlew
           ./gradlew assembleDebug -PcodigoVersion=$CODIGO --no-daemon
-          NOMBRE=$(grep -oP "versionName '\K[^']+" app/build.gradle).$CODIGO
+          NOMBRE=$(grep '^versionBase=' gradle.properties | cut -d= -f2).$CODIGO
           mkdir -p ../salida
           cp app/build/outputs/apk/debug/app-debug.apk ../salida/PulsePC.apk
           printf '{"versionCode": %s, "versionName": "%s", "commit": "%s"}\n' "$CODIGO" "$NOMBRE" "$GITHUB_SHA" > ../salida/version.json
