@@ -1,5 +1,5 @@
 """
-PulsoPC - agente del PC.
+PulsePC - agente del PC.
 
 Lee las estadisticas del PC y las sirve por la red local:
   - GET /stats   -> JSON con CPU, RAM, GPU, temperaturas, red y discos
@@ -148,7 +148,7 @@ def asegurar_lhm():
     import io
     import zipfile
     estado_lhm["texto"] = "Sensores: descargando LibreHardwareMonitor..."
-    req = urllib.request.Request(LHM_API, headers={"User-Agent": "PulsoPC",
+    req = urllib.request.Request(LHM_API, headers={"User-Agent": "PulsePC",
                                                    "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=20) as r:
         rel = json.load(r)
@@ -161,7 +161,7 @@ def asegurar_lhm():
                              1 if ".net." in a["name"].lower() else 0, len(a["name"])))
     asset = zips[0]
     with urllib.request.urlopen(urllib.request.Request(asset["browser_download_url"],
-                                                       headers={"User-Agent": "PulsoPC"}), timeout=120) as r:
+                                                       headers={"User-Agent": "PulsePC"}), timeout=120) as r:
         datos = r.read()
     z = zipfile.ZipFile(io.BytesIO(datos))
     dlls = [n for n in z.namelist() if n.lower().endswith(".dll")]
@@ -656,7 +656,7 @@ def bucle_usb(puerto_http, mantener_app=True):
                 sh(sn, "reverse", regla, regla)
                 _tunel_usb["serials"].add(sn)
                 if sn not in conocidos:
-                    avisar("Movil conectado por USB. Abriendo PulsoPC...")
+                    avisar("Movil conectado por USB. Abriendo PulsePC...")
                     sh(sn, "shell", "svc", "power", "stayon", "usb")  # pantalla encendida con USB
                     abrir_app(sn)
                     conocidos.add(sn)
@@ -787,7 +787,7 @@ def diseno_actual():
 
 PANEL_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PulsoPC</title><style>
+<title>PulsePC</title><style>
 body{background:#0e1116;color:#e6e6e6;font-family:sans-serif;margin:12px}
 .c{background:#171b22;border-radius:10px;padding:10px;margin:8px 0}
 .b{height:10px;background:#2a303a;border-radius:5px;overflow:hidden}
@@ -859,7 +859,7 @@ class Manejador(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.split("?")[0] == "/salir":
             # Cierra el agente (solo desde el propio PC). Sirve para actualizarlo sin
-            # tener que usar el menu del icono; luego se relanza con: schtasks /Run /TN PulsoPC
+            # tener que usar el menu del icono; luego se relanza con: schtasks /Run /TN PulsePC
             # Por USB el movil tambien llega como 127.0.0.1, asi que se exige ademas
             # el token que el agente guarda en agente/.token (solo legible en el PC).
             if (not self.client_address[0].startswith("127.")
@@ -916,7 +916,7 @@ def ip_local():
 class Servidor(ThreadingHTTPServer):
     daemon_threads = True
     # En Windows, SO_REUSEADDR deja abrir dos agentes en el mismo puerto: lo evitamos
-    # para detectar que PulsoPC ya esta abierto.
+    # para detectar que PulsePC ya esta abierto.
     allow_reuse_address = platform.system() != "Windows"
 
     def server_bind(self):
@@ -956,7 +956,7 @@ def arrancar(puerto=PUERTO_HTTP, intervalo=1.0, mantener_app=True):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Agente PulsoPC (modo consola)")
+    ap = argparse.ArgumentParser(description="Agente PulsePC (modo consola)")
     ap.add_argument("--puerto", type=int, default=PUERTO_HTTP)
     ap.add_argument("--intervalo", type=float, default=1.0, help="segundos entre lecturas")
     ap.add_argument("--no-mantener-app", action="store_true",
@@ -966,10 +966,10 @@ def main():
     try:
         arrancar(a.puerto, a.intervalo, not a.no_mantener_app)
     except OSError:
-        print("El puerto %d ya esta en uso: seguramente PulsoPC ya esta abierto "
+        print("El puerto %d ya esta en uso: seguramente PulsePC ya esta abierto "
               "(mira el icono junto al reloj)." % a.puerto)
         return
-    print("PulsoPC agente en marcha.")
+    print("PulsePC agente en marcha.")
     print("  Panel web: http://%s:%d/" % (ip_local(), a.puerto))
     print("  Personalizar el movil: http://localhost:%d/editor" % a.puerto)
     print("  Wi-Fi: la app del movil lo encontrara sola en la misma red.")

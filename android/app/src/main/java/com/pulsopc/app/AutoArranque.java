@@ -5,7 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 
 /**
- * Abre PulsoPC solo, sin tocar el movil:
+ * Abre PulsePC solo, sin tocar el movil:
  *  - al terminar de encender el movil (BOOT_COMPLETED)
  *  - al recibir corriente por el cable (POWER_CONNECTED), p. ej. al encender el PC.
  * En Android 6 ambos avisos llegan a un receptor declarado en el manifiesto.

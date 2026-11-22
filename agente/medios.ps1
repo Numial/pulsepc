@@ -1,4 +1,4 @@
-# PulsoPC - lo que suena ahora en Windows (Spotify, navegador, reproductor...).
+# PulsePC - lo que suena ahora en Windows (Spotify, navegador, reproductor...).
 # Lo arranca el agente (oculto). Escribe una linea JSON por segundo en la salida:
 #   {"titulo":"...","artista":"...","app":"Spotify.exe","estado":"reproduciendo"}
 # o {} si no hay ninguna sesion multimedia. Termina solo cuando se cierra la salida.

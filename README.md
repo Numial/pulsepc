@@ -1,10 +1,10 @@
-# PulsoPC
+# PulsePC
 
 Mira las estadísticas de tu PC en tiempo real en un móvil antiguo (Android 6.0 o superior), por Wi‑Fi o por cable USB.
 
 ```
 ┌──────────── PC (Windows) ────────────┐        Wi‑Fi         ┌──── Móvil (Android 6+) ────┐
-│ agente/pulsopc_agente.py              │  UDP 47800: "estoy aquí" │ App PulsoPC                │
+│ agente/pulsopc_agente.py              │  UDP 47800: "estoy aquí" │ App PulsePC                │
 │  · psutil: CPU, RAM, red, discos      │ ───────────────────────▶ │  · encuentra el PC sola    │
 │  · nvidia-smi: GPU                    │  HTTP 47801 /stats (JSON) │  · pide /stats cada 1 s    │
 │  · LibreHardwareMonitor: temperaturas │ ◀─────────────────────── │  · dibuja el panel         │
@@ -16,16 +16,16 @@ Mira las estadísticas de tu PC en tiempo real en un móvil antiguo (Android 6.0
 
 Requiere Python 3.8+.
 
-1. Doble clic en `agente/iniciar_agente.bat`. Instala lo necesario (`psutil`, `pystray`, `pillow`), cierra su ventana y deja **PulsoPC en la bandeja**, junto al reloj (puede estar dentro de la flechita ^).
+1. Doble clic en `agente/iniciar_agente.bat`. Instala lo necesario (`psutil`, `pystray`, `pillow`), cierra su ventana y deja **PulsePC en la bandeja**, junto al reloj (puede estar dentro de la flechita ^).
 2. La primera vez, Windows pedirá permiso en el firewall: permite **redes privadas**.
 3. Desde el icono: *Personalizar el móvil*, *Ver panel web*, *Arrancar con Windows* y *Salir*. El icono se pone verde cuando el móvil está leyendo datos.
 
-**Arranque automático:** la primera vez se activa *Arrancar con Windows*. PulsoPC queda esperando con muy poco consumo (lee el PC cada 5 s mientras no hay móvil) y, en cuanto enchufas el móvil por USB, le abre la app y te avisa con una notificación. Se puede desactivar desde el menú del icono.
+**Arranque automático:** la primera vez se activa *Arrancar con Windows*. PulsePC queda esperando con muy poco consumo (lee el PC cada 5 s mientras no hay móvil) y, en cuanto enchufas el móvil por USB, le abre la app y te avisa con una notificación. Se puede desactivar desde el menú del icono.
 
 ¿Prefieres verlo en una ventana de consola para depurar? Usa `agente/iniciar_agente_consola.bat`. El registro del modo bandeja está en `agente/pulsopc.log`.
 
-**Temperaturas, ventiladores y consumos:** PulsoPC lleva [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) integrado. La primera vez descarga su librería oficial en `agente/lhm/` y la lee en segundo plano, sin abrir ninguna app. Para la temperatura de la CPU:
-- PulsoPC tiene que correr **como administrador**. Al abrir `iniciar_agente.bat`, Windows pide permiso una vez y PulsoPC crea una tarea programada que, desde entonces, lo arranca elevado al iniciar sesión **sin más avisos**.
+**Temperaturas, ventiladores y consumos:** PulsePC lleva [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) integrado. La primera vez descarga su librería oficial en `agente/lhm/` y la lee en segundo plano, sin abrir ninguna app. Para la temperatura de la CPU:
+- PulsePC tiene que correr **como administrador**. Al abrir `iniciar_agente.bat`, Windows pide permiso una vez y PulsePC crea una tarea programada que, desde entonces, lo arranca elevado al iniciar sesión **sin más avisos**.
 - LibreHardwareMonitor 0.9.5+ usa el driver **PawnIO**. Si falta, el menú del icono muestra *Instalar driver de sensores (PawnIO)* (o `winget install namazso.PawnIO`).
 - El estado de los sensores aparece en la primera línea del menú del icono.
 

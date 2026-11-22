@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title PulsoPC - agente (consola)
+title PulsePC - agente (consola)
 
 rem --- Buscar Python: lanzador "py", "python" real (no el atajo de la Microsoft Store) o rutas habituales ---
 set "PY="

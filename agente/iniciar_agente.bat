@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title PulsoPC
+title PulsePC
 
 rem --- Buscar Python: lanzador "py", "python" real (no el atajo de la Microsoft Store) o rutas habituales ---
 set "PY="
@@ -35,7 +35,7 @@ rem (PY puede venir entre comillas, asi que no se compara su texto: se usa la ma
 set "PYW=%PY:python.exe=pythonw.exe%"
 if defined LANZADOR set "PYW=pyw -3"
 
-echo Preparando PulsoPC (solo la primera vez tarda un poco)...
+echo Preparando PulsePC (solo la primera vez tarda un poco)...
 %PY% -m pip install --quiet --disable-pip-version-check psutil pystray pillow
 if errorlevel 1 (
   echo No se pudieron instalar las dependencias. Revisa tu conexion a Internet.

@@ -191,7 +191,7 @@ public class PanelView extends View {
             long t = System.currentTimeMillis() / 30000;
             float px = w * (0.3f + 0.4f * ((t * 37) % 10) / 10f);
             float py = h * (0.3f + 0.4f * ((t * 53) % 10) / 10f);
-            c.drawText("PulsoPC · esperando al PC", px, py, pTexto);
+            c.drawText("PulsePC · esperando al PC", px, py, pTexto);
             return;
         }
 
@@ -607,7 +607,7 @@ public class PanelView extends View {
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setColor(TEXTO);
         pTexto.setTextSize(16 * dp);
-        String equipo = s != null ? s.optString("equipo", "PC") : "PulsoPC";
+        String equipo = s != null ? s.optString("equipo", "PC") : "PulsePC";
         equipo = encajar(equipo, w * 0.5f);
         float finEquipo = x + 18 * dp + pTexto.measureText(equipo);
         c.drawText(equipo, x + 18 * dp, y + h / 2 + 6 * dp, pTexto);

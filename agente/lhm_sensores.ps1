@@ -1,4 +1,4 @@
-# PulsoPC - lector de sensores con LibreHardwareMonitorLib.
+# PulsePC - lector de sensores con LibreHardwareMonitorLib.
 # Lo arranca el agente (oculto). Escribe una linea JSON por segundo en la salida:
 #   {"sensores":[{"hw":"Intel Core i7","tipo_hw":"Cpu","nombre":"CPU Package","tipo":"Temperature","valor":54.0}, ...]}
 # Para leer la temperatura de la CPU hace falta ejecutarlo como administrador.

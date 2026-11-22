@@ -1,5 +1,5 @@
 """
-PulsoPC en la bandeja de Windows (junto al reloj), sin ventana de terminal.
+PulsePC en la bandeja de Windows (junto al reloj), sin ventana de terminal.
 
 - Arranca el agente en segundo plano.
 - Icono verde: el movil esta leyendo datos. Gris: esperando al movil.
@@ -43,7 +43,8 @@ from PIL import Image, ImageDraw  # noqa: E402
 
 import pulsopc_agente as agente  # noqa: E402
 
-NOMBRE_RUN = "PulsoPC"
+NOMBRE_RUN = "PulsePC"
+NOMBRE_ANTIGUO = "PulsoPC"   # nombre anterior de la app (tarea y clave Run)
 CLAVE_RUN = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
@@ -171,6 +172,27 @@ def ejecutar_elevado(cmd, args_lista=None):
     return ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, DIR, 1) > 32
 
 
+def migrar_nombre_antiguo():
+    """La app se llamaba PulsoPC: se borra la tarea/clave Run con ese nombre y se crea la nueva."""
+    import subprocess
+    habia = False
+    r = subprocess.run(["schtasks", "/Query", "/TN", NOMBRE_ANTIGUO], capture_output=True,
+                       creationflags=SIN_VENTANA)
+    if r.returncode == 0 and agente.es_admin():
+        subprocess.run(["schtasks", "/Delete", "/TN", NOMBRE_ANTIGUO, "/F"], capture_output=True,
+                       creationflags=SIN_VENTANA)
+        habia = True
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, CLAVE_RUN, 0, winreg.KEY_ALL_ACCESS) as k:
+            winreg.DeleteValue(k, NOMBRE_ANTIGUO)
+            habia = True
+    except OSError:
+        pass
+    if habia:
+        poner_arranque(True)
+
+
 def quitar_acceso_antiguo():
     """La version 0.2 ponia un acceso directo en la carpeta Inicio; ahora va en el registro."""
     try:
@@ -199,13 +221,17 @@ def main():
             if i < intentos - 1:
                 time.sleep(0.5)
                 continue
-            # Ya hay un PulsoPC abierto: abrimos el editor y salimos sin duplicar.
+            # Ya hay un PulsePC abierto: abrimos el editor y salimos sin duplicar.
             webbrowser.open("http://localhost:%d/editor" % agente.PUERTO_HTTP)
             return
 
     es_windows = os.name == "nt"
     if es_windows:
         quitar_acceso_antiguo()
+        try:
+            migrar_nombre_antiguo()
+        except Exception as e:
+            logging.info("No pude migrar el arranque antiguo: %s", e)
         marca = os.path.join(DIR, ".arranque_configurado")
         try:
             if not os.path.exists(marca):
@@ -235,7 +261,7 @@ def main():
     def instalar_pawnio(icon, item):
         ejecutar_elevado(["winget", "install", "--id", "namazso.PawnIO", "-e",
                           "--accept-package-agreements", "--accept-source-agreements"])
-        avisar_local("Instalando el driver PawnIO. Cuando termine, reinicia PulsoPC.")
+        avisar_local("Instalando el driver PawnIO. Cuando termine, reinicia PulsePC.")
 
     def avisar_local(t):
         agente.estado["avisos"].append(t)
@@ -255,9 +281,9 @@ def main():
         pystray.MenuItem("Abrir registro", lambda i, it: os.startfile(os.path.join(DIR, "pulsopc.log"))
                          if es_windows else None, visible=es_windows),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Salir de PulsoPC", salir),
+        pystray.MenuItem("Salir de PulsePC", salir),
     )
-    icon = pystray.Icon("PulsoPC", ICONO_OFF, "PulsoPC · esperando al móvil", menu)
+    icon = pystray.Icon("PulsePC", ICONO_OFF, "PulsePC · esperando al móvil", menu)
 
     def vigilar():
         conectado = None
@@ -267,11 +293,11 @@ def main():
                 conectado = ahora
                 icon.icon = ICONO_ON if ahora else ICONO_OFF
                 via = "USB" if agente.estado["usb"] else "Wi-Fi"
-                icon.title = ("PulsoPC · móvil conectado (%s)" % via) if ahora else "PulsoPC · esperando al móvil"
+                icon.title = ("PulsePC · móvil conectado (%s)" % via) if ahora else "PulsePC · esperando al móvil"
             while agente.estado["avisos"]:
                 texto = agente.estado["avisos"].pop(0)
                 try:
-                    icon.notify(texto, "PulsoPC")
+                    icon.notify(texto, "PulsePC")
                 except Exception:
                     pass
             time.sleep(1)
@@ -279,7 +305,7 @@ def main():
     def al_arrancar(icon):
         icon.visible = True
         threading.Thread(target=vigilar, daemon=True).start()
-        logging.info("PulsoPC en marcha en la bandeja.")
+        logging.info("PulsePC en marcha en la bandeja.")
 
     icon.run(setup=al_arrancar)
 
