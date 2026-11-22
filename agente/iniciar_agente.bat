@@ -14,7 +14,7 @@ if not defined PY (
   )
 )
 if not defined PY (
-  for /d %%D in ("%LOCALAPPDATA%\Programs\Python\Python3*" "%ProgramFiles%\Python3*" "C:\Python3*") do (
+  for /d %%D in ("%LOCALAPPDATA%\Python\pythoncore-3*" "%LOCALAPPDATA%\Python\bin" "%LOCALAPPDATA%\Programs\Python\Python3*" "%ProgramFiles%\Python3*" "C:\Python3*") do (
     if not defined PY if exist "%%~D\python.exe" set "PY="%%~D\python.exe""
   )
 )
