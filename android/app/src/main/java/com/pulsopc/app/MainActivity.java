@@ -176,6 +176,7 @@ public class MainActivity extends Activity {
 
             actual = via;
             if (j != null) actualizarPortada(via, j.optJSONObject("medios"));
+            if (j != null) actualizarImagenes(via);
             if (j != null && j.has("cpu")) {
                 panel.setConexion(HOST_USB.equals(via) ? "USB" : "Wi-Fi " + via.split(":")[0]);
                 publicar(j, null);
@@ -238,6 +239,54 @@ public class MainActivity extends Activity {
         }
         final android.graphics.Bitmap fin = bmp;
         ui.post(new Runnable() { public void run() { panel.setPortada(fin); } });
+    }
+
+    private final java.util.HashMap<String, Long> fallosImagen = new java.util.HashMap<>();
+
+    /** Descarga (una por vuelta) las fotos y GIF del widget Imagen que aun no tiene el movil. */
+    private void actualizarImagenes(String h) {
+        for (final String id : panel.imagenesDelDiseno()) {
+            if (panel.tieneImagen(id)) continue;
+            Long fallo = fallosImagen.get(id);
+            if (fallo != null && System.currentTimeMillis() - fallo < 30000) continue;
+            android.graphics.Bitmap foto = null;
+            android.graphics.Movie gif = null;
+            try {
+                HttpURLConnection c = (HttpURLConnection) new URL("http://" + h + "/imagen?id=" + id).openConnection();
+                c.setConnectTimeout(1500);
+                c.setReadTimeout(8000);
+                InputStream in = c.getInputStream();
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] b = new byte[32768];
+                int n;
+                while ((n = in.read(b)) > 0) out.write(b, 0, n);
+                c.disconnect();
+                byte[] datos = out.toByteArray();
+                if (id.endsWith(".gif")) {
+                    gif = android.graphics.Movie.decodeByteArray(datos, 0, datos.length);
+                    if (gif != null && (gif.duration() <= 0 || gif.width() <= 0)) gif = null;
+                }
+                if (gif == null) {
+                    // Foto: se reduce para no gastar memoria de mas en un movil antiguo.
+                    android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+                    o.inJustDecodeBounds = true;
+                    android.graphics.BitmapFactory.decodeByteArray(datos, 0, datos.length, o);
+                    int escala = 1;
+                    while (o.outWidth / (escala * 2) >= 1024 || o.outHeight / (escala * 2) >= 1024) escala *= 2;
+                    o = new android.graphics.BitmapFactory.Options();
+                    o.inSampleSize = escala;
+                    foto = android.graphics.BitmapFactory.decodeByteArray(datos, 0, datos.length, o);
+                }
+                if (foto == null && gif == null) throw new Exception("no se pudo leer");
+            } catch (Throwable e) {
+                fallosImagen.put(id, System.currentTimeMillis());
+                continue;
+            }
+            final android.graphics.Bitmap f = foto;
+            final android.graphics.Movie g = gif;
+            ui.post(new Runnable() { public void run() { panel.setImagen(id, f, g); } });
+            return;   // una por vuelta, para no retrasar los datos
+        }
     }
 
     /** Boton multimedia del movil: el agente pulsa la tecla multimedia en el PC. */

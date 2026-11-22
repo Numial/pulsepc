@@ -682,7 +682,7 @@ def bucle_usb(puerto_http, mantener_app=True):
 # asi que el movil lo aplica en el siguiente segundo sin reiniciar nada.
 
 TIPOS_WIDGET = ["cpu", "ram", "gpu", "temps", "red", "disco", "nucleos",
-                "gpu_detalle", "ventiladores", "reloj", "procesos", "bateria", "multimedia", "grafica"]
+                "gpu_detalle", "ventiladores", "reloj", "procesos", "bateria", "multimedia", "grafica", "imagen"]
 METRICAS_GRAFICA = ["cpu", "gpu", "ram", "temp_cpu", "temp_gpu", "red"]
 
 DISENO_POR_DEFECTO = {
@@ -780,6 +780,10 @@ def validar_diseno(d, destino="movil"):
             if w["tipo"] == "grafica":
                 m = w.get("metrica", "cpu")
                 limpio["metrica"] = m if m in METRICAS_GRAFICA else "cpu"
+            if w["tipo"] == "imagen":
+                img = str(w.get("imagen", ""))
+                limpio["imagen"] = img if RE_IMAGEN.match(img) else ""
+                limpio["ajuste"] = "contener" if w.get("ajuste") == "contener" else "cubrir"
             ws.append(limpio)
         paginas.append({"nombre": str(p.get("nombre", "Pagina"))[:20], "columnas": cols,
                         "filas": filas, "widgets": ws})
@@ -808,6 +812,62 @@ def _clave(destino):
     return "pantalla" if destino == "pantalla" else "valor"
 
 
+# ---------------------------------------------------------------- imagenes --
+# Fotos y GIF del widget "imagen": se suben desde el editor (solo desde el PC) y se
+# guardan en agente/imagenes/ con un nombre sacado de su contenido.
+
+import hashlib  # noqa: E402
+import re  # noqa: E402
+
+DIR_IMAGENES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "imagenes")
+RE_IMAGEN = re.compile(r"^[0-9a-f]{16}\.(png|jpg|gif|webp)$")
+MAX_IMAGEN = 15 * 1024 * 1024
+TIPOS_IMAGEN = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
+
+
+def tipo_imagen(datos):
+    if datos[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if datos[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if datos[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if datos[:4] == b"RIFF" and datos[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def guardar_imagen(datos):
+    ext = tipo_imagen(datos)
+    if not ext:
+        raise ValueError("solo se admiten fotos PNG, JPG, WEBP o GIF")
+    nombre = hashlib.sha1(datos).hexdigest()[:16] + "." + ext
+    os.makedirs(DIR_IMAGENES, exist_ok=True)
+    ruta = os.path.join(DIR_IMAGENES, nombre)
+    if not os.path.exists(ruta):
+        with open(ruta + ".tmp", "wb") as f:
+            f.write(datos)
+        os.replace(ruta + ".tmp", ruta)
+    return nombre
+
+
+def limpiar_imagenes():
+    """Borra las imagenes que ya no usa ningun diseno (y que no se acaban de subir)."""
+    usadas = set()
+    for d in (diseno_actual(), diseno_actual("pantalla")):
+        for pg in (d or {}).get("paginas", []):
+            for w in pg.get("widgets", []):
+                if w.get("imagen"):
+                    usadas.add(w["imagen"])
+    try:
+        for n in os.listdir(DIR_IMAGENES):
+            ruta = os.path.join(DIR_IMAGENES, n)
+            if RE_IMAGEN.match(n) and n not in usadas and time.time() - os.path.getmtime(ruta) > 3600:
+                os.remove(ruta)
+    except OSError:
+        pass
+
+
 def cargar_diseno():
     for destino, (ruta, defecto) in DESTINOS.items():
         try:
@@ -831,6 +891,7 @@ def guardar_diseno(d, destino="movil"):
     os.replace(tmp, ruta)
     with _diseno["lock"]:
         _diseno[_clave(destino)] = d
+    limpiar_imagenes()
     return d
 
 
@@ -924,6 +985,20 @@ class Manejador(BaseHTTPRequestHandler):
                 datos = f.read()
             tipo = "image/png" if datos[:4] == b"\x89PNG" else "image/jpeg"
             self._enviar(200, datos, tipo)
+        elif ruta == "/imagen":
+            nombre = self.path.split("id=", 1)[-1].split("&")[0] if "id=" in self.path else ""
+            if not RE_IMAGEN.match(nombre) or not os.path.isfile(os.path.join(DIR_IMAGENES, nombre)):
+                self.send_error(404)
+                return
+            with open(os.path.join(DIR_IMAGENES, nombre), "rb") as f:
+                datos = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", TIPOS_IMAGEN[nombre.rsplit(".", 1)[1]])
+            self.send_header("Content-Length", str(len(datos)))
+            # El nombre sale del contenido: si cambia la foto, cambia el nombre. Se puede guardar.
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.end_headers()
+            self.wfile.write(datos)
         elif ruta == "/editor":
             try:
                 with open(RUTA_EDITOR, "rb") as f:
@@ -957,6 +1032,25 @@ class Manejador(BaseHTTPRequestHandler):
                 _cerrar_procesos()
                 os._exit(0)
             threading.Thread(target=_salir, daemon=True).start()
+            return
+        if self.path.split("?")[0] == "/imagen":
+            # Subir una foto o GIF para el widget Imagen: solo desde el propio PC (el editor).
+            if not self._es_local():
+                self._json({"error": "Las imagenes solo se pueden subir desde el PC"}, 403)
+                return
+            try:
+                n = int(self.headers.get("Content-Length", "0"))
+                if n <= 0 or n > MAX_IMAGEN:
+                    raise ValueError("la imagen tiene que ocupar menos de %d MB" % (MAX_IMAGEN // 1048576))
+                datos = b""
+                while len(datos) < n:
+                    trozo = self.rfile.read(n - len(datos))
+                    if not trozo:
+                        break
+                    datos += trozo
+                self._json({"ok": True, "id": guardar_imagen(datos)})
+            except Exception as e:
+                self._json({"error": str(e)}, 400)
             return
         if self.path.split("?")[0] == "/accion":
             # Botones multimedia del movil: solo pulsan teclas multimedia, nada mas.

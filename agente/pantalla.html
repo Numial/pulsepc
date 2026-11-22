@@ -34,6 +34,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--fondo);color:var
 .med img{height:100%;max-height:22vh;aspect-ratio:1;object-fit:cover;border-radius:1.2vh}
 .med .g{font-size:4vh;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 canvas{flex:1;width:100%;min-height:0}
+.w.img{padding:0;position:relative}
+.w.img .c{position:absolute;inset:0}
+.w.img .c img{width:100%;height:100%;display:block}
+.w.img .t{position:absolute;left:1.6vw;bottom:1.2vh;z-index:1;opacity:1;text-shadow:0 1px 4px #000;margin:0}
 .reloj{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center}
 .reloj .g{font-size:12vh}
 #puntos{position:absolute;bottom:1vh;left:0;right:0;text-align:center;font-size:2vh;opacity:.5;letter-spacing:.6vw}
@@ -42,6 +46,7 @@ canvas{flex:1;width:100%;min-height:0}
 <div id="raiz"><div id="cab"><b id="equipo">PulsePC</b><span id="hora"></span></div><div id="rejilla"></div></div>
 <div id="puntos"></div><div id="espera">PulsePC · esperando al PC…</div>
 <script>
+var IMGS={};
 var S=null,D=null,pag=0,cambio=Date.now(),hist={},HMAX=120,ultOK=0,versionD=null;
 function e(x){return String(x==null?"":x).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function n(x,d){return x==null||isNaN(x)?"–":Number(x).toFixed(d||0)}
@@ -83,8 +88,10 @@ var W={
  bateria:function(){var b=S.bateria;if(!b)return{t:"Batería",h:'<div class="s">Sin batería</div>'};
    return{t:"Batería",h:'<div class="g">'+n(b.porcentaje)+'<small> %</small></div>'+bar(b.porcentaje)+'<div class="s">'+(b.cargando?"Cargando":b.minutos?Math.floor(b.minutos/60)+" h "+(b.minutos%60)+" min":"")+'</div>'}},
  multimedia:function(){var m=S.medios||{};if(!m.titulo)return{t:"Multimedia",h:'<div class="s">No suena nada</div>'};
-   return{t:"Suena ahora"+(m.app?" · "+m.app:""),h:'<div class="med">'+(m.portada_id?'<img src="/portada?id='+encodeURIComponent(m.portada_id)+'">':'')+
+   return{t:"Suena ahora"+(m.app?" · "+m.app:""),h:'<div class="med">'+(m.portada_id?'<span class="ph" data-src="/portada?id='+encodeURIComponent(m.portada_id)+'"></span>':'')+
    '<div style="min-width:0"><div class="g">'+e(m.titulo)+'</div><div class="s">'+e(m.artista||"")+(m.estado=="pausa"?" · en pausa":"")+'</div></div></div>'}},
+ imagen:function(w){if(!w.imagen)return{t:"Imagen",h:'<div class="s">Elige una foto o un GIF en el editor</div>'};
+   return{t:"",img:1,h:'<span class="ph" data-src="/imagen?id='+encodeURIComponent(w.imagen)+'" data-ajuste="'+(w.ajuste=="contener"?"contain":"cover")+'"></span>'}},
  grafica:function(w){var m=w.metrica||"cpu",v=valor(m);return{t:NOMBRE_M[m],a:(m=="temp_cpu"||m=="temp_gpu")&&v>=D.alerta_temp,graf:m,
    h:'<div class="g" style="font-size:4.5vh">'+(m=="red"?vel(v):n(v)+(m.indexOf("temp")==0?" °C":" %"))+'</div><canvas></canvas>'}}
 };
@@ -114,9 +121,15 @@ function pintar(){
   var pos=colocar(p),k2=0;
   for(var q=0;q<pos.length;q++){var o=pos[q];if(o.f<0)continue;var w=p.widgets[o.i],f=W[w.tipo];if(!f)continue;var r;try{r=f(w)}catch(err){r={t:w.tipo,h:""}}
     if(r.graf)grafs.push([k2,r.graf]);k2++;
-    h+='<div class="w'+(r.a?' alerta':'')+'" style="grid-column:'+(o.c+1)+' / span '+o.an+';grid-row:'+(o.f+1)+' / span '+o.al+'">'+
+    h+='<div class="w'+(r.a?' alerta':'')+(r.img?' img':'')+'" style="grid-column:'+(o.c+1)+' / span '+o.an+';grid-row:'+(o.f+1)+' / span '+o.al+'">'+
        ((w.titulo||r.t)?'<div class="t">'+e(w.titulo||r.t)+'</div>':'')+'<div class="c">'+r.h+'</div></div>'}
   rj.innerHTML=h;
+  // Las imagenes (fotos, GIF, portada) no se vuelven a crear cada segundo: se reutiliza el
+  // mismo elemento para que no parpadeen ni se reinicie el GIF.
+  var phs=rj.querySelectorAll(".ph");
+  for(var z=0;z<phs.length;z++){var src=phs[z].getAttribute("data-src"),im=IMGS[src];
+    if(!im){im=IMGS[src]=new Image();im.src=src}
+    im.style.objectFit=phs[z].getAttribute("data-ajuste")||"cover";phs[z].parentNode.replaceChild(im,phs[z])}
   for(var j=0;j<grafs.length;j++)pintarGrafica(rj.children[grafs[j][0]].querySelector("canvas"),grafs[j][1]);
   document.getElementById("cab").style.display=D.cabecera?"flex":"none";
   document.getElementById("equipo").textContent=S.equipo||"PulsePC";

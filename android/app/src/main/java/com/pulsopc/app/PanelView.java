@@ -66,6 +66,37 @@ public class PanelView extends View {
     private android.graphics.Bitmap portada;
     public void setPortada(android.graphics.Bitmap b) { portada = b; invalidate(); }
 
+    // Widget "imagen": fotos (Bitmap) y GIF animados (Movie), descargados por MainActivity.
+    private final java.util.HashMap<String, android.graphics.Bitmap> fotos = new java.util.HashMap<>();
+    private final java.util.HashMap<String, android.graphics.Movie> gifs = new java.util.HashMap<>();
+    private final java.util.HashMap<String, android.graphics.Bitmap> fotogramas = new java.util.HashMap<>();
+    private final long inicioGif = System.currentTimeMillis();
+    private final android.graphics.Rect origen = new android.graphics.Rect();
+
+    public void setImagen(String id, android.graphics.Bitmap foto, android.graphics.Movie gif) {
+        if (gif != null) gifs.put(id, gif); else if (foto != null) fotos.put(id, foto);
+        invalidate();
+    }
+
+    /** Imagenes que usa el diseno actual (las que hay que descargar). */
+    public java.util.ArrayList<String> imagenesDelDiseno() {
+        java.util.ArrayList<String> ids = new java.util.ArrayList<>();
+        if (paginas == null) return ids;
+        for (int i = 0; i < paginas.length(); i++) {
+            JSONObject p = paginas.optJSONObject(i);
+            JSONArray ws = p != null ? p.optJSONArray("widgets") : null;
+            if (ws == null) continue;
+            for (int j = 0; j < ws.length(); j++) {
+                JSONObject wd = ws.optJSONObject(j);
+                String id = wd != null && "imagen".equals(wd.optString("tipo")) ? wd.optString("imagen", "") : "";
+                if (!id.isEmpty() && !ids.contains(id)) ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    public boolean tieneImagen(String id) { return fotos.containsKey(id) || gifs.containsKey(id); }
+
     public interface OyenteAccion { void onAccion(String accion); }
     private OyenteAccion oyente;
     public void setOyenteAccion(OyenteAccion o) { oyente = o; }
@@ -265,7 +296,8 @@ public class PanelView extends View {
             tituloActual = wd.optString("titulo", "");
             widgetActual = wd;
             String tipo = wd.optString("tipo", "");
-            dibujarWidget(c, tipo, x + pd, y + pd, tw - 2 * pd, th - 2 * pd);
+            if ("imagen".equals(tipo)) tarjetaImagen(c, wd, x, y, tw, th);
+            else dibujarWidget(c, tipo, x + pd, y + pd, tw - 2 * pd, th - 2 * pd);
             // Alerta: borde rojo parpadeante si la temperatura se dispara
             if (enAlerta(tipo) && (System.currentTimeMillis() / 1000) % 2 == 0) {
                 pTrazo.setColor(ALERTA);
@@ -294,6 +326,61 @@ public class PanelView extends View {
             case "multimedia": tarjetaMultimedia(c, ix, iy, iw, ih); break;
             case "grafica": tarjetaGrafica(c, ix, iy, iw, ih); break;
         }
+    }
+
+    /** Foto o GIF ocupando toda la tarjeta (recortada o entera, segun el ajuste). */
+    private void tarjetaImagen(Canvas c, JSONObject wd, float x, float y, float w, float h) {
+        String id = wd.optString("imagen", "");
+        android.graphics.Bitmap bmp = fotos.get(id);
+        android.graphics.Movie gif = gifs.get(id);
+        if (gif != null && gif.width() > 0 && gif.height() > 0) {
+            // Movie se pinta en un lienzo propio (por software) y luego se escala como una foto.
+            bmp = fotogramas.get(id);
+            if (bmp == null) {
+                bmp = android.graphics.Bitmap.createBitmap(gif.width(), gif.height(), android.graphics.Bitmap.Config.ARGB_8888);
+                fotogramas.put(id, bmp);
+            }
+            int dur = gif.duration() > 0 ? gif.duration() : 1000;
+            gif.setTime((int) ((System.currentTimeMillis() - inicioGif) % dur));
+            bmp.eraseColor(0);
+            gif.draw(new Canvas(bmp), 0, 0);
+            postInvalidateDelayed(66);   // siguiente fotograma (~15 por segundo)
+        }
+        if (bmp == null) {
+            String t = id.isEmpty() ? "Elige una foto en el editor" : "Cargando imagen...";
+            pTexto.setColor(TENUE);
+            pTexto.setTextSize(12 * dp);
+            pTexto.setTextAlign(Paint.Align.CENTER);
+            c.drawText(encajar(t, w - 16 * dp), x + w / 2, y + h / 2, pTexto);
+            return;
+        }
+        float bw = bmp.getWidth(), bh = bmp.getHeight();
+        c.save();
+        r.set(x, y, x + w, y + h);
+        ruta.reset();
+        ruta.addRoundRect(r, 10 * dp, 10 * dp, Path.Direction.CW);
+        c.clipPath(ruta);
+        if ("contener".equals(wd.optString("ajuste"))) {
+            float e = Math.min(w / bw, h / bh);
+            float dw = bw * e, dh = bh * e;
+            r.set(x + (w - dw) / 2, y + (h - dh) / 2, x + (w + dw) / 2, y + (h + dh) / 2);
+            c.drawBitmap(bmp, null, r, pImagen);
+        } else {
+            float e = Math.max(w / bw, h / bh);
+            float sw = w / e, sh = h / e;
+            origen.set((int) ((bw - sw) / 2), (int) ((bh - sh) / 2), (int) ((bw + sw) / 2), (int) ((bh + sh) / 2));
+            c.drawBitmap(bmp, origen, r, pImagen);
+        }
+        String t = wd.optString("titulo", "");
+        if (!t.isEmpty()) {
+            pTexto.setColor(0xFFFFFFFF);
+            pTexto.setTextSize(13 * dp);
+            pTexto.setTextAlign(Paint.Align.LEFT);
+            pTexto.setShadowLayer(4 * dp, 0, 1 * dp, 0xCC000000);
+            c.drawText(encajar(t, w - 20 * dp), x + 10 * dp, y + h - 10 * dp, pTexto);
+            pTexto.clearShadowLayer();
+        }
+        c.restore();
     }
 
     private float tempCpu() {

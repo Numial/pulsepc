@@ -47,6 +47,7 @@ Con el agente abierto, abre **`agente/personalizar.bat`** (o `http://localhost:4
 - Añade widgets, arrástralos para ordenarlos y cambia su tamaño y título:
   CPU (con temperatura), memoria, GPU, GPU detalle, temperaturas, núcleos, red, discos, ventiladores y consumo, reloj,
   **procesos** (los que más CPU gastan), **batería** (portátiles), **gráfica** grande (CPU, GPU, memoria, temperatura de CPU o GPU, red)
+  **imagen / GIF** (sube una foto o un GIF animado desde el editor; se ve en el móvil y en el Nest Hub)
   y **multimedia**: botones tocables en el móvil para anterior / reproducir-pausa / siguiente y volumen, con lo que suena ahora.
 - **Alerta de temperatura:** si la CPU o la GPU pasan del límite (90 °C por defecto), su tarjeta parpadea en rojo.
 - Elige un tema de colores o ajusta cada color.

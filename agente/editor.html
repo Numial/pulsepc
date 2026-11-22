@@ -117,7 +117,7 @@ body.hub .solo-movil{display:none}
 <script>
 const NOMBRES = {cpu:"CPU",ram:"Memoria",gpu:"GPU",temps:"Temperaturas",red:"Red",disco:"Discos",
   nucleos:"Núcleos",gpu_detalle:"GPU detalle",ventiladores:"Ventiladores",reloj:"Reloj",
-  procesos:"Procesos",bateria:"Batería",multimedia:"Multimedia",grafica:"Gráfica"};
+  procesos:"Procesos",bateria:"Batería",multimedia:"Multimedia",grafica:"Gráfica",imagen:"Imagen / GIF"};
 const METRICAS = {cpu:"CPU",gpu:"GPU",ram:"Memoria",temp_cpu:"Temperatura CPU",temp_gpu:"Temperatura GPU",red:"Red (bajada)"};
 const ETQ_COLOR = {fondo:"Fondo",tarjeta:"Tarjetas",acento:"Acento",secundario:"Secundario",texto:"Texto"};
 const TEMAS = [
@@ -183,6 +183,7 @@ function valor(t,w){
     case"procesos":{const p=s.procesos||[];return[p.length?p[0].nombre+" "+f(p[0].cpu,1)+" %":"Procesos",null]}
     case"bateria":return s.bateria?[s.bateria.porcentaje+" %"+(s.bateria.cargando?" · cargando":""),s.bateria.porcentaje]:["Sin batería",null];
     case"multimedia":{const m=s.medios||{};return[m.titulo?m.titulo:"⏮  ⏯  ⏭",null]}
+    case"imagen":return[w&&w.imagen?"":"Elige una foto o un GIF",null];
   }return["",null];
 }
 
@@ -214,7 +215,8 @@ function pintar(){
   // paleta
   $("paleta").innerHTML="";
   tipos.forEach(t=>{const b=document.createElement("button");b.textContent="+ "+NOMBRES[t];
-    b.onclick=()=>{p.widgets.push({tipo:t,ancho:1,alto:1,titulo:""});selW=p.widgets.length-1;cambio()};$("paleta").appendChild(b)});
+    b.onclick=()=>{p.widgets.push({tipo:t,ancho:1,alto:1,titulo:""});selW=p.widgets.length-1;cambio();
+      if(t==="imagen"&&$("wImgF"))$("wImgF").click()};$("paleta").appendChild(b)});
   // pantalla
   const pan=$("pantalla");pan.style.background=T.fondo;pan.style.color=T.texto;pan.innerHTML="";
   if(D.cabecera){const c=document.createElement("div");c.className="cab";c.innerHTML=`<i></i><b>${esc(stats.equipo||"Mi PC")}</b><span style="margin-left:auto;opacity:.6">USB · ${esc(stats.so||"Windows")}</span>`;pan.appendChild(c)}
@@ -227,6 +229,9 @@ function pintar(){
     el.style.gridColumn=`${o.c+1} / span ${o.an}`;el.style.gridRow=`${o.f+1} / span ${o.al}`;
     const[v,pc]=valor(w.tipo,w);
     el.innerHTML=`<div class="t">${esc(w.titulo||NOMBRES[w.tipo])}</div><div class="v">${esc(v)}</div>`+(pc!=null?`<div class="b"><i style="width:${Math.min(100,pc)}%"></i></div>`:"");
+    if(w.tipo==="imagen"&&w.imagen){el.style.backgroundImage=`url(/imagen?id=${encodeURIComponent(w.imagen)})`;
+      el.style.backgroundSize=w.ajuste==="contener"?"contain":"cover";el.style.backgroundPosition="center";el.style.backgroundRepeat="no-repeat";
+      if(!w.titulo)el.querySelector(".t").style.visibility="hidden"}
     el.onclick=()=>{selW=o.i;pintar()};
     el.draggable=true;el.dataset.i=o.i;
     el.ondragstart=e=>{arrastre=true;e.dataTransfer.setData("text/plain",o.i);el.classList.add("arrastrando")};
@@ -246,6 +251,10 @@ function pintar(){
       <label>Título <input type="text" id="wTit" style="width:150px" placeholder="${NOMBRES[w.tipo]}" value="${esc(w.titulo||"")}"></label>
       <label>Ancho (columnas) <input type="number" id="wAn" min="1" max="${p.columnas}" value="${w.ancho}"></label>
       <label>Alto (filas) <input type="number" id="wAl" min="1" max="${p.filas}" value="${w.alto}"></label>
+      ${w.tipo==="imagen"?`<label>Foto o GIF <button id="wImg">${w.imagen?"Cambiar…":"Elegir…"}</button></label>
+        <input type="file" id="wImgF" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+        <label>Ajuste <select id="wAj"><option value="cubrir"${w.ajuste!=="contener"?" selected":""}>Llenar la tarjeta (recorta)</option><option value="contener"${w.ajuste==="contener"?" selected":""}>Entera (sin recortar)</option></select></label>
+        <p class="vacio" style="font-size:12px;margin:4px 0">PNG, JPG, WEBP o GIF animado, hasta 15 MB. El título solo se ve si escribes uno.</p>`:""}
       ${w.tipo==="grafica"?`<label>Qué muestra <select id="wMet">${Object.keys(METRICAS).map(m=>`<option value="${m}"${m===(w.metrica||"cpu")?" selected":""}>${METRICAS[m]}</option>`).join("")}</select></label>`:""}
       <label>Tipo <select id="wTipo">${tipos.map(t=>`<option value="${t}"${t===w.tipo?" selected":""}>${NOMBRES[t]}</option>`).join("")}</select></label>
       <div class="fila"><button id="wAnt">◀ Antes</button><button id="wDes">Después ▶</button><button class="peligro" id="wBorrar">Quitar</button></div>
@@ -256,6 +265,14 @@ function pintar(){
     $("wAl").onchange=e=>{w.alto=lim(e.target.value,1,p.filas);cambio()};
     $("wTipo").onchange=e=>{w.tipo=e.target.value;cambio()};
     if($("wMet"))$("wMet").onchange=e=>{w.metrica=e.target.value;cambio()};
+    if($("wImg")){$("wImg").onclick=()=>$("wImgF").click();
+      $("wAj").onchange=e=>{w.ajuste=e.target.value;cambio()};
+      $("wImgF").onchange=async e=>{const f=e.target.files[0];if(!f)return;
+        if(f.size>15*1048576){estado("La imagen ocupa más de 15 MB","err");return}
+        estado("Subiendo imagen…");
+        try{const r=await fetch("/imagen",{method:"POST",headers:{"Content-Type":f.type||"application/octet-stream"},body:f});
+          const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);w.imagen=j.id;cambio()}
+        catch(err){estado("No se pudo subir: "+err.message,"err")}}}
     $("wAnt").onclick=()=>moverW(-1);$("wDes").onclick=()=>moverW(1);
     $("wBorrar").onclick=()=>{p.widgets.splice(selW,1);selW=-1;cambio()};
   }
