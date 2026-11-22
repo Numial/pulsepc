@@ -235,18 +235,24 @@ public class PanelView extends View {
     }
 
     private void tarjetaReloj(Canvas c, float x, float y, float w, float h) {
-        titulo(c, "Reloj", x, y);
+        titulo(c, "Reloj", x, y, w);
         java.util.Date ahora = new java.util.Date();
         String hora = new java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora);
         String fecha = new java.text.SimpleDateFormat("EEEE d MMMM", new Locale("es", "ES")).format(ahora);
         pTexto.setTextAlign(Paint.Align.CENTER);
         pTexto.setColor(TEXTO);
-        float tam = Math.min(h * 0.5f, w / 3.2f);
+        float tam = Math.min(h * 0.5f, w / 2.6f);
         pTexto.setTextSize(tam);
-        c.drawText(hora, x + w / 2, y + h / 2 + tam * 0.3f, pTexto);
+        hora = encajar(hora, w);
+        tam = pTexto.getTextSize();
+        float tamFecha = Math.max(11 * dp, tam * 0.2f);
+        // Hora y fecha centradas juntas, con la fecha siempre debajo sin pisar la hora.
+        float bloque = tam * 0.72f + tamFecha * 1.6f;
+        float base = y + 16 * dp + (h - 16 * dp - bloque) / 2 + tam * 0.72f;
+        c.drawText(hora, x + w / 2, base, pTexto);
         pTexto.setColor(TENUE);
-        pTexto.setTextSize(Math.max(11 * dp, tam * 0.2f));
-        c.drawText(fecha, x + w / 2, y + h / 2 + tam * 0.3f + tam * 0.35f, pTexto);
+        pTexto.setTextSize(tamFecha);
+        c.drawText(encajar(fecha, w), x + w / 2, base + tamFecha * 1.6f, pTexto);
     }
 
     private void dibujarCabecera(Canvas c, float x, float y, float w, float h) {
@@ -257,6 +263,8 @@ public class PanelView extends View {
         pTexto.setColor(TEXTO);
         pTexto.setTextSize(16 * dp);
         String equipo = s != null ? s.optString("equipo", "PC") : "PulsoPC";
+        equipo = encajar(equipo, w * 0.5f);
+        float finEquipo = x + 18 * dp + pTexto.measureText(equipo);
         c.drawText(equipo, x + 18 * dp, y + h / 2 + 6 * dp, pTexto);
         if (s != null) {
             pTexto.setTextAlign(Paint.Align.RIGHT);
@@ -265,16 +273,32 @@ public class PanelView extends View {
             String extra = (conexion.isEmpty() ? "" : conexion + "  ·  ") + s.optString("so", "")
                     + "  ·  encendido " + duracion(s.optDouble("uptime_s", 0));
             if (!ok) extra = "sin conexión  ·  " + extra;
-            c.drawText(extra, x + w, y + h / 2 + 5 * dp, pTexto);
+            c.drawText(encajar(extra, x + w - finEquipo - 12 * dp), x + w, y + h / 2 + 5 * dp, pTexto);
         }
     }
 
-    private void titulo(Canvas c, String t, float x, float y) {
+    private void titulo(Canvas c, String t, float x, float y, float w) {
         if (tituloActual != null && !tituloActual.isEmpty()) t = tituloActual;
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setColor(TENUE);
         pTexto.setTextSize(12 * dp);
-        c.drawText(t.toUpperCase(Locale.ROOT), x, y + 12 * dp, pTexto);
+        c.drawText(encajar(t.toUpperCase(Locale.ROOT), w), x, y + 12 * dp, pTexto);
+    }
+
+    /**
+     * Hace que el texto quepa en maxW con el tamano actual de pTexto: primero lo
+     * reduce (hasta un 75 %) y, si aun no cabe, lo recorta con "...". Asi nada se
+     * sale de su tarjeta aunque el widget sea estrecho (p. ej. 3 columnas en vertical).
+     */
+    private String encajar(String t, float maxW) {
+        if (t == null) return "";
+        float ancho = pTexto.measureText(t);
+        if (ancho <= maxW || maxW <= 0) return t;
+        float tam = pTexto.getTextSize();
+        pTexto.setTextSize(Math.max(tam * 0.75f, tam * maxW / ancho));
+        if (pTexto.measureText(t) <= maxW) return t;
+        int n = pTexto.breakText(t, true, Math.max(0, maxW - pTexto.measureText("…")), null);
+        return t.substring(0, Math.max(0, n)) + "…";
     }
 
     /** Anillo de porcentaje con el valor en el centro. */
@@ -289,11 +313,11 @@ public class PanelView extends View {
         pTexto.setTextAlign(Paint.Align.CENTER);
         pTexto.setColor(TEXTO);
         pTexto.setTextSize(radio * 0.5f);
-        c.drawText(centro, cx, cy + radio * 0.17f, pTexto);
+        c.drawText(encajar(centro, radio * 1.6f), cx, cy + radio * 0.17f, pTexto);
         if (sub != null) {
             pTexto.setColor(TENUE);
             pTexto.setTextSize(Math.max(10 * dp, radio * 0.2f));
-            c.drawText(sub, cx, cy + radio * 0.6f, pTexto);
+            c.drawText(encajar(sub, radio * 1.6f), cx, cy + radio * 0.6f, pTexto);
         }
     }
 
@@ -327,7 +351,7 @@ public class PanelView extends View {
     private void tarjetaCpu(Canvas c, float x, float y, float w, float h) {
         JSONObject cpu = s.optJSONObject("cpu");
         if (cpu == null) return;
-        titulo(c, "CPU", x, y);
+        titulo(c, "CPU", x, y, w);
         float uso = (float) cpu.optDouble("uso", 0);
         double f = cpu.optDouble("freq_mhz", Double.NaN);
         String sub = Double.isNaN(f) ? null : String.format(Locale.ROOT, "%.2f GHz", f / 1000);
@@ -341,7 +365,7 @@ public class PanelView extends View {
     private void tarjetaRam(Canvas c, float x, float y, float w, float h) {
         JSONObject ram = s.optJSONObject("ram");
         if (ram == null) return;
-        titulo(c, "Memoria", x, y);
+        titulo(c, "Memoria", x, y, w);
         float pct = (float) ram.optDouble("porcentaje", 0);
         String sub = String.format(Locale.ROOT, "%.1f / %.1f GB",
                 ram.optDouble("usada_gb", 0), ram.optDouble("total_gb", 0));
@@ -352,15 +376,16 @@ public class PanelView extends View {
     private void tarjetaGpu(Canvas c, float x, float y, float w, float h) {
         JSONObject g = primeraGpu();
         if (g == null) {
-            titulo(c, "GPU", x, y);
+            titulo(c, "GPU", x, y, w);
             pTexto.setTextAlign(Paint.Align.CENTER);
             pTexto.setColor(TENUE);
             pTexto.setTextSize(13 * dp);
-            c.drawText("No detectada", x + w / 2, y + h / 2, pTexto);
-            c.drawText("(se lee con nvidia-smi)", x + w / 2, y + h / 2 + 18 * dp, pTexto);
+            c.drawText(encajar("No detectada", w), x + w / 2, y + h / 2, pTexto);
+            pTexto.setTextSize(13 * dp);
+            c.drawText(encajar("(se lee con nvidia-smi)", w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
             return;
         }
-        titulo(c, "GPU · " + recortar(g.optString("nombre", ""), 22), x, y);
+        titulo(c, "GPU · " + recortar(g.optString("nombre", ""), 22), x, y, w);
         float uso = (float) g.optDouble("uso", 0);
         double t = g.optDouble("temp", Double.NaN);
         String sub = Double.isNaN(t) ? null : Math.round(t) + " °C";
@@ -371,21 +396,23 @@ public class PanelView extends View {
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setColor(TENUE);
         pTexto.setTextSize(11 * dp);
-        c.drawText(String.format(Locale.ROOT, "VRAM %.1f / %.1f GB", vu / 1024, vt / 1024),
+        c.drawText(encajar(String.format(Locale.ROOT, "VRAM %.1f / %.1f GB", vu / 1024, vt / 1024), w),
                 x, y + h - grafH - 6 * dp, pTexto);
         linea(c, histGpu, x, y + h - grafH, w, grafH, 100, SECUNDARIO);
     }
 
     private void tarjetaTemps(Canvas c, float x, float y, float w, float h) {
-        titulo(c, "Temperaturas", x, y);
+        titulo(c, "Temperaturas", x, y, w);
         JSONArray t = s.optJSONArray("temperaturas");
         if (t == null || t.length() == 0) {
             pTexto.setTextAlign(Paint.Align.CENTER);
             pTexto.setColor(TENUE);
             pTexto.setTextSize(13 * dp);
-            c.drawText("Sin sensores", x + w / 2, y + h / 2, pTexto);
-            c.drawText("Abre LibreHardwareMonitor", x + w / 2, y + h / 2 + 18 * dp, pTexto);
-            c.drawText("con servidor web activado", x + w / 2, y + h / 2 + 34 * dp, pTexto);
+            c.drawText(encajar("Sin sensores", w), x + w / 2, y + h / 2, pTexto);
+            pTexto.setTextSize(13 * dp);
+            c.drawText(encajar("Abre LibreHardwareMonitor", w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
+            pTexto.setTextSize(13 * dp);
+            c.drawText(encajar("con servidor web activado", w), x + w / 2, y + h / 2 + 34 * dp, pTexto);
             return;
         }
         float fila = 20 * dp;
@@ -396,13 +423,16 @@ public class PanelView extends View {
             if (o == null) continue;
             float v = (float) o.optDouble("valor", 0);
             String nombre = recortar(o.optString("sensor", ""), 20);
+            String grados = Math.round(v) + " °C";
+            pTexto.setTextSize(12 * dp);
+            float anchoV = pTexto.measureText(grados);
             pTexto.setTextAlign(Paint.Align.LEFT);
             pTexto.setColor(TEXTO);
+            c.drawText(encajar(nombre, w - anchoV - 6 * dp), x, yy + 12 * dp, pTexto);
             pTexto.setTextSize(12 * dp);
-            c.drawText(nombre, x, yy + 12 * dp, pTexto);
             pTexto.setTextAlign(Paint.Align.RIGHT);
             pTexto.setColor(colorPorNivel(v, 70, 85));
-            c.drawText(Math.round(v) + " °C", x + w, yy + 12 * dp, pTexto);
+            c.drawText(grados, x + w, yy + 12 * dp, pTexto);
             barra(c, x, yy + 15 * dp, w, 3 * dp, v, colorPorNivel(v, 70, 85));
             yy += fila;
         }
@@ -411,13 +441,14 @@ public class PanelView extends View {
     private void tarjetaRed(Canvas c, float x, float y, float w, float h) {
         JSONObject red = s.optJSONObject("red");
         if (red == null) return;
-        titulo(c, "Red", x, y);
+        titulo(c, "Red", x, y, w);
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setTextSize(18 * dp);
         pTexto.setColor(ACENTO);
-        c.drawText("↓ " + velocidad(red.optDouble("bajada_kbs", 0)), x, y + 40 * dp, pTexto);
+        c.drawText(encajar("↓ " + velocidad(red.optDouble("bajada_kbs", 0)), w), x, y + 40 * dp, pTexto);
+        pTexto.setTextSize(18 * dp);
         pTexto.setColor(SECUNDARIO);
-        c.drawText("↑ " + velocidad(red.optDouble("subida_kbs", 0)), x, y + 64 * dp, pTexto);
+        c.drawText(encajar("↑ " + velocidad(red.optDouble("subida_kbs", 0)), w), x, y + 64 * dp, pTexto);
         float gy = y + 74 * dp;
         if (h - (gy - y) > 20 * dp) {
             float max = 1;
@@ -430,11 +461,11 @@ public class PanelView extends View {
     private void tarjetaDisco(Canvas c, float x, float y, float w, float h) {
         JSONObject d = s.optJSONObject("disco");
         if (d == null) return;
-        titulo(c, "Discos", x, y);
+        titulo(c, "Discos", x, y, w);
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setTextSize(12 * dp);
         pTexto.setColor(TEXTO);
-        c.drawText("L " + velocidad(d.optDouble("lectura_kbs", 0)) + "   E " + velocidad(d.optDouble("escritura_kbs", 0)),
+        c.drawText(encajar("L " + velocidad(d.optDouble("lectura_kbs", 0)) + "   E " + velocidad(d.optDouble("escritura_kbs", 0)), w),
                 x, y + 34 * dp, pTexto);
         JSONArray u = d.optJSONArray("unidades");
         if (u == null) return;
@@ -444,13 +475,20 @@ public class PanelView extends View {
             JSONObject o = u.optJSONObject(i);
             if (o == null) continue;
             float pct = (float) o.optDouble("porcentaje", 0);
-            pTexto.setTextAlign(Paint.Align.LEFT);
-            pTexto.setColor(TEXTO);
-            c.drawText(recortar(o.optString("unidad", ""), 12), x, yy + 12 * dp, pTexto);
+            String nombre = recortar(o.optString("unidad", ""), 12);
+            String tam = String.format(Locale.ROOT, "%.0f / %.0f GB", o.optDouble("usado_gb", 0), o.optDouble("total_gb", 0));
+            // El tamano va a la derecha y el nombre ocupa lo que quede, sin pisarse.
+            pTexto.setTextSize(12 * dp);
+            float anchoNombre = Math.min(pTexto.measureText(nombre), w * 0.35f);
             pTexto.setTextAlign(Paint.Align.RIGHT);
             pTexto.setColor(TENUE);
-            c.drawText(String.format(Locale.ROOT, "%.0f / %.0f GB", o.optDouble("usado_gb", 0), o.optDouble("total_gb", 0)),
-                    x + w, yy + 12 * dp, pTexto);
+            tam = encajar(tam, w - anchoNombre - 8 * dp);
+            float anchoTam = pTexto.measureText(tam);
+            c.drawText(tam, x + w, yy + 12 * dp, pTexto);
+            pTexto.setTextSize(12 * dp);
+            pTexto.setTextAlign(Paint.Align.LEFT);
+            pTexto.setColor(TEXTO);
+            c.drawText(encajar(nombre, w - anchoTam - 8 * dp), x, yy + 12 * dp, pTexto);
             barra(c, x, yy + 16 * dp, w, 4 * dp, pct, colorPorNivel(pct, 80, 92));
             yy += fila;
         }
@@ -459,7 +497,7 @@ public class PanelView extends View {
     private void tarjetaNucleos(Canvas c, float x, float y, float w, float h) {
         JSONObject cpu = s.optJSONObject("cpu");
         JSONArray n = cpu != null ? cpu.optJSONArray("nucleos") : null;
-        titulo(c, "Núcleos", x, y);
+        titulo(c, "Núcleos", x, y, w);
         if (n == null || n.length() == 0) return;
         int k = n.length();
         int cols = k > 8 ? 2 : 1;
@@ -485,12 +523,15 @@ public class PanelView extends View {
 
     private void filaDato(Canvas c, String nombre, String valor, float x, float y, float w) {
         pTexto.setTextSize(13 * dp);
-        pTexto.setTextAlign(Paint.Align.LEFT);
-        pTexto.setColor(TENUE);
-        c.drawText(nombre, x, y, pTexto);
         pTexto.setTextAlign(Paint.Align.RIGHT);
         pTexto.setColor(TEXTO);
+        valor = encajar(valor, w * 0.6f);
+        float anchoV = pTexto.measureText(valor);
         c.drawText(valor, x + w, y, pTexto);
+        pTexto.setTextSize(13 * dp);
+        pTexto.setTextAlign(Paint.Align.LEFT);
+        pTexto.setColor(TENUE);
+        c.drawText(encajar(nombre, w - anchoV - 8 * dp), x, y, pTexto);
     }
 
     private static String num(JSONObject o, String k, String fmt) {
@@ -500,7 +541,7 @@ public class PanelView extends View {
 
     private void tarjetaGpuDetalle(Canvas c, float x, float y, float w, float h) {
         JSONObject g = primeraGpu();
-        titulo(c, g == null ? "GPU" : "GPU · " + recortar(g.optString("nombre", ""), 24), x, y);
+        titulo(c, g == null ? "GPU" : "GPU · " + recortar(g.optString("nombre", ""), 24), x, y, w);
         if (g == null) return;
         float fila = 22 * dp, yy = y + 38 * dp;
         String[][] datos = {
@@ -522,7 +563,7 @@ public class PanelView extends View {
     }
 
     private void tarjetaVentiladores(Canvas c, float x, float y, float w, float h) {
-        titulo(c, "Ventiladores y consumo", x, y);
+        titulo(c, "Ventiladores y consumo", x, y, w);
         float fila = 22 * dp, yy = y + 38 * dp;
         JSONArray f = s.optJSONArray("ventiladores");
         JSONArray p = s.optJSONArray("consumos");
@@ -546,8 +587,9 @@ public class PanelView extends View {
             pTexto.setTextAlign(Paint.Align.CENTER);
             pTexto.setColor(TENUE);
             pTexto.setTextSize(13 * dp);
-            c.drawText("Necesita LibreHardwareMonitor", x + w / 2, y + h / 2, pTexto);
-            c.drawText("con servidor web activado", x + w / 2, y + h / 2 + 18 * dp, pTexto);
+            c.drawText(encajar("Necesita LibreHardwareMonitor", w), x + w / 2, y + h / 2, pTexto);
+            pTexto.setTextSize(13 * dp);
+            c.drawText(encajar("con servidor web activado", w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
         }
     }
 
