@@ -243,9 +243,25 @@ def datos_lhm_integrado():
     orden_hw = {"Cpu": 0, "GpuNvidia": 1, "GpuAmd": 1, "GpuIntel": 1, "Motherboard": 2, "SuperIO": 2,
                 "Storage": 3, "Memory": 4}
     temps, fans, consumos = [], [], []
+    # Discos: una sola temperatura por unidad, llamada "Disco" (o "Disco 1", "Disco 2"...).
+    discos = []
+    for x in sens:
+        if x["tipo_hw"] == "Storage" and x["tipo"] == "Temperature" and x["hw"] not in discos:
+            discos.append(x["hw"])
+    disco_hecho = set()
     for x in sorted(sens, key=lambda x: orden_hw.get(x["tipo_hw"], 5)):
         if x["tipo"] == "Temperature" and 0 < x["valor"] < 150:
-            temps.append({"dispositivo": x["hw"], "sensor": x["nombre"], "valor": x["valor"]})
+            nombre = x["nombre"]
+            # Los NVMe publican sus umbrales ("Warning Temperature", "Critical Temperature")
+            # como si fueran sensores: no son lecturas y en el movil parecian alarmas.
+            if any(p in nombre for p in ("Warning", "Critical", "Limit", "Threshold")):
+                continue
+            if x["tipo_hw"] == "Storage":
+                if x["hw"] in disco_hecho:
+                    continue   # "Temperature #1/#2" repiten la del disco
+                disco_hecho.add(x["hw"])
+                nombre = "Disco" if len(discos) == 1 else "Disco %d" % (discos.index(x["hw"]) + 1)
+            temps.append({"dispositivo": x["hw"], "sensor": nombre, "valor": x["valor"]})
         elif x["tipo"] == "Fan" and x["valor"] > 0:
             fans.append({"dispositivo": x["hw"], "sensor": x["nombre"], "rpm": x["valor"]})
         elif x["tipo"] == "Power" and x["valor"] > 0:
