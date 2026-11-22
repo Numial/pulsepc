@@ -902,6 +902,13 @@ class Manejador(BaseHTTPRequestHandler):
             with _ultimo["lock"]:
                 datos = dict(_ultimo["stats"])
             datos["diseno"] = diseno_actual("pantalla" if pantalla else "movil")
+            if pantalla:
+                # Version de pantalla.html: si cambia (PulsePC actualizado), la pagina abierta
+                # en el Nest Hub se recarga sola en vez de seguir con el codigo antiguo.
+                try:
+                    datos["pagina_v"] = int(os.path.getmtime(RUTA_PANTALLA))
+                except OSError:
+                    pass
             self._json(datos)
         elif ruta == "/config":
             destino = self._destino()

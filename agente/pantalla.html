@@ -125,8 +125,12 @@ function pintar(){
 }
 function aplicarTema(){if(!D||D.version===versionD)return;versionD=D.version;var t=D.tema||{},s=document.documentElement.style;
   s.setProperty("--fondo",t.fondo);s.setProperty("--tarjeta",t.tarjeta);s.setProperty("--acento",t.acento);s.setProperty("--sec",t.secundario);s.setProperty("--texto",t.texto)}
+var PV=null;
 function pedir(){var r=new XMLHttpRequest();r.open("GET","/stats?pantalla=1");r.timeout=4000;
-  r.onload=function(){try{var s=JSON.parse(r.responseText);if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar()}catch(x){}};r.send()}
+  r.onload=function(){try{var s=JSON.parse(r.responseText);
+    // PulsePC actualizado: la pagina se recarga para no seguir con el codigo antiguo.
+    if(s.pagina_v){if(PV===null)PV=s.pagina_v;else if(s.pagina_v!==PV){location.reload();return}}
+    if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar()}catch(x){}};r.send()}
 setInterval(pedir,1000);pedir();
 // Sin datos 30 s: se oscurece y avisa. Anti-quemado: se mueve un poco cada minuto.
 setInterval(function(){var sin=Date.now()-ultOK>30000;document.getElementById("espera").style.display=sin?"flex":"none";

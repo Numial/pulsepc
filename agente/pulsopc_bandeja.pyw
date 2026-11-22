@@ -276,6 +276,15 @@ def main():
         def _b():
             try:
                 cast.buscar()
+                # Si una pantalla ya estaba mostrando PulsePC (enviada antes de reiniciar el
+                # agente), se le vuelve a enviar: asi carga la version actual de la pagina
+                # (DashCast no la recarga sola y se quedaba con la antigua, sin pagina fija)
+                # y este agente la vigila y la puede cerrar con "Dejar de enviar".
+                time.sleep(2)
+                uuid = cast.uuid_mostrando()
+                if uuid and not cast.estado["enviando"]:
+                    cast.enviar(uuid, "http://%s:%d/pantalla" % (agente.ip_local(), agente.PUERTO_HTTP))
+                    logging.info("Pantalla que ya mostraba PulsePC recargada con la version actual.")
             except Exception as e:
                 logging.info("Buscar pantallas: %s", e)
                 cast.estado["error"] = str(e)

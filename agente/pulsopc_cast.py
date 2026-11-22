@@ -148,6 +148,17 @@ def mostrando():
     return None
 
 
+def uuid_mostrando():
+    """uuid de la pantalla que ya muestra PulsePC (DashCast) aunque no la haya enviado este agente."""
+    for uuid, c in list(_casts.items()):
+        try:
+            if c.status and c.status.app_id == APP_DASHCAST:
+                return uuid
+        except Exception:
+            pass
+    return None
+
+
 def parar():
     """Deja de enviar y cierra PulsePC en la pantalla (en todas las que lo muestren)."""
     _parar.set()
