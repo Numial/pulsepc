@@ -41,6 +41,15 @@ public class PanelView extends View {
     private final float[] histCpu = new float[N], histGpu = new float[N];
     private final float[] histBajada = new float[N], histSubida = new float[N];
     private int cabeza;
+    private int pagina;               // 0 = resumen, 1 = detalle
+    private String conexion = "";
+
+    public void setConexion(String c) { conexion = c; }
+
+    public void siguientePagina() {
+        pagina = (pagina + 1) % 2;
+        invalidate();
+    }
 
     public PanelView(Context c) {
         super(c);
@@ -103,25 +112,42 @@ public class PanelView extends View {
         }
 
         boolean horizontal = w > h;
-        int cols = horizontal ? 3 : 2, filas = horizontal ? 2 : 3;
         float top = m + alturaCab + m;
-        float tw = (w - m * (cols + 1)) / cols;
-        float th = (h - top - m * filas) / filas;
+        if (pagina == 0) {
+            int cols = horizontal ? 3 : 2, filas = horizontal ? 2 : 3;
+            rejilla(c, w, h, top, m, cols, filas, 6, 0);
+        } else {
+            int cols = horizontal ? 3 : 1, filas = horizontal ? 1 : 3;
+            rejilla(c, w, h, top, m, cols, filas, 3, 6);
+        }
+        // Puntos de pagina
+        for (int i = 0; i < 2; i++) {
+            pRelleno.setColor(i == pagina ? TEXTO : PISTA);
+            c.drawCircle(w / 2f + (i - 0.5f) * 12 * dp, h - 4 * dp, 2.5f * dp, pRelleno);
+        }
+    }
 
-        for (int i = 0; i < 6; i++) {
+    private void rejilla(Canvas c, int w, int h, float top, float m, int cols, int filas, int n, int primera) {
+        float tw = (w - m * (cols + 1)) / cols;
+        float th = (h - top - m * filas - 4 * dp) / filas;
+        for (int i = 0; i < n; i++) {
             float x = m + (i % cols) * (tw + m);
             float y = top + (i / cols) * (th + m);
             r.set(x, y, x + tw, y + th);
             pRelleno.setColor(TARJETA);
             c.drawRoundRect(r, 10 * dp, 10 * dp, pRelleno);
             float p = 10 * dp;
-            switch (i) {
-                case 0: tarjetaCpu(c, x + p, y + p, tw - 2 * p, th - 2 * p); break;
-                case 1: tarjetaRam(c, x + p, y + p, tw - 2 * p, th - 2 * p); break;
-                case 2: tarjetaGpu(c, x + p, y + p, tw - 2 * p, th - 2 * p); break;
-                case 3: tarjetaTemps(c, x + p, y + p, tw - 2 * p, th - 2 * p); break;
-                case 4: tarjetaRed(c, x + p, y + p, tw - 2 * p, th - 2 * p); break;
-                case 5: tarjetaDisco(c, x + p, y + p, tw - 2 * p, th - 2 * p); break;
+            float ix = x + p, iy = y + p, iw = tw - 2 * p, ih = th - 2 * p;
+            switch (primera + i) {
+                case 0: tarjetaCpu(c, ix, iy, iw, ih); break;
+                case 1: tarjetaRam(c, ix, iy, iw, ih); break;
+                case 2: tarjetaGpu(c, ix, iy, iw, ih); break;
+                case 3: tarjetaTemps(c, ix, iy, iw, ih); break;
+                case 4: tarjetaRed(c, ix, iy, iw, ih); break;
+                case 5: tarjetaDisco(c, ix, iy, iw, ih); break;
+                case 6: tarjetaNucleos(c, ix, iy, iw, ih); break;
+                case 7: tarjetaGpuDetalle(c, ix, iy, iw, ih); break;
+                case 8: tarjetaVentiladores(c, ix, iy, iw, ih); break;
             }
         }
     }
@@ -139,7 +165,8 @@ public class PanelView extends View {
             pTexto.setTextAlign(Paint.Align.RIGHT);
             pTexto.setColor(TENUE);
             pTexto.setTextSize(12 * dp);
-            String extra = s.optString("so", "") + "  ·  encendido " + duracion(s.optDouble("uptime_s", 0));
+            String extra = (conexion.isEmpty() ? "" : conexion + "  ·  ") + s.optString("so", "")
+                    + "  ·  encendido " + duracion(s.optDouble("uptime_s", 0));
             if (!ok) extra = "sin conexión  ·  " + extra;
             c.drawText(extra, x + w, y + h / 2 + 5 * dp, pTexto);
         }
@@ -328,6 +355,101 @@ public class PanelView extends View {
                     x + w, yy + 12 * dp, pTexto);
             barra(c, x, yy + 16 * dp, w, 4 * dp, pct, colorPorNivel(pct, 80, 92));
             yy += fila;
+        }
+    }
+
+    private void tarjetaNucleos(Canvas c, float x, float y, float w, float h) {
+        JSONObject cpu = s.optJSONObject("cpu");
+        JSONArray n = cpu != null ? cpu.optJSONArray("nucleos") : null;
+        titulo(c, "Núcleos", x, y);
+        if (n == null || n.length() == 0) return;
+        int k = n.length();
+        int cols = k > 8 ? 2 : 1;
+        int filas = (k + cols - 1) / cols;
+        float top = y + 22 * dp;
+        float fila = (h - 22 * dp) / filas;
+        float colW = (w - (cols - 1) * 12 * dp) / cols;
+        float alto = Math.max(3 * dp, Math.min(10 * dp, fila * 0.35f));
+        pTexto.setTextSize(Math.max(9 * dp, Math.min(12 * dp, fila * 0.45f)));
+        for (int i = 0; i < k; i++) {
+            float v = (float) n.optDouble(i, 0);
+            float cx = x + (i / filas) * (colW + 12 * dp);
+            float cy = top + (i % filas) * fila;
+            pTexto.setTextAlign(Paint.Align.LEFT);
+            pTexto.setColor(TENUE);
+            c.drawText(String.valueOf(i), cx, cy + fila / 2 + 4 * dp, pTexto);
+            pTexto.setTextAlign(Paint.Align.RIGHT);
+            pTexto.setColor(TEXTO);
+            c.drawText(Math.round(v) + "%", cx + colW, cy + fila / 2 + 4 * dp, pTexto);
+            barra(c, cx + 20 * dp, cy + fila / 2 - alto / 2, colW - 58 * dp, alto, v, colorPorNivel(v, 70, 90));
+        }
+    }
+
+    private void filaDato(Canvas c, String nombre, String valor, float x, float y, float w) {
+        pTexto.setTextSize(13 * dp);
+        pTexto.setTextAlign(Paint.Align.LEFT);
+        pTexto.setColor(TENUE);
+        c.drawText(nombre, x, y, pTexto);
+        pTexto.setTextAlign(Paint.Align.RIGHT);
+        pTexto.setColor(TEXTO);
+        c.drawText(valor, x + w, y, pTexto);
+    }
+
+    private static String num(JSONObject o, String k, String fmt) {
+        double v = o.optDouble(k, Double.NaN);
+        return Double.isNaN(v) ? "-" : String.format(Locale.ROOT, fmt, v);
+    }
+
+    private void tarjetaGpuDetalle(Canvas c, float x, float y, float w, float h) {
+        JSONObject g = primeraGpu();
+        titulo(c, g == null ? "GPU" : "GPU · " + recortar(g.optString("nombre", ""), 24), x, y);
+        if (g == null) return;
+        float fila = 22 * dp, yy = y + 38 * dp;
+        String[][] datos = {
+                {"Uso", num(g, "uso", "%.0f %%")},
+                {"Temperatura", num(g, "temp", "%.0f °C")},
+                {"Reloj núcleo", num(g, "reloj_mhz", "%.0f MHz")},
+                {"Reloj memoria", num(g, "reloj_mem_mhz", "%.0f MHz")},
+                {"Consumo", num(g, "consumo_w", "%.0f W") + " / " + num(g, "limite_w", "%.0f W")},
+                {"Ventilador", num(g, "ventilador", "%.0f %%")},
+                {"VRAM", String.format(Locale.ROOT, "%.0f / %.0f MB",
+                        g.optDouble("vram_usada_mb", 0), g.optDouble("vram_total_mb", 0))},
+        };
+        for (String[] d : datos) {
+            if (yy > y + h) break;
+            filaDato(c, d[0], d[1], x, yy, w);
+            yy += fila;
+        }
+        if (yy < y + h - 30 * dp) linea(c, histGpu, x, yy, w, y + h - yy, 100, SECUNDARIO);
+    }
+
+    private void tarjetaVentiladores(Canvas c, float x, float y, float w, float h) {
+        titulo(c, "Ventiladores y consumo", x, y);
+        float fila = 22 * dp, yy = y + 38 * dp;
+        JSONArray f = s.optJSONArray("ventiladores");
+        JSONArray p = s.optJSONArray("consumos");
+        boolean nada = true;
+        for (int i = 0; f != null && i < f.length() && yy <= y + h; i++) {
+            JSONObject o = f.optJSONObject(i);
+            if (o == null || o.optDouble("rpm", 0) <= 0) continue;
+            filaDato(c, recortar(o.optString("sensor", ""), 18), num(o, "rpm", "%.0f RPM"), x, yy, w);
+            yy += fila;
+            nada = false;
+        }
+        for (int i = 0; p != null && i < p.length() && yy <= y + h; i++) {
+            JSONObject o = p.optJSONObject(i);
+            if (o == null) continue;
+            filaDato(c, recortar(o.optString("dispositivo", "") + " " + o.optString("sensor", ""), 22),
+                    num(o, "w", "%.1f W"), x, yy, w);
+            yy += fila;
+            nada = false;
+        }
+        if (nada) {
+            pTexto.setTextAlign(Paint.Align.CENTER);
+            pTexto.setColor(TENUE);
+            pTexto.setTextSize(13 * dp);
+            c.drawText("Necesita LibreHardwareMonitor", x + w / 2, y + h / 2, pTexto);
+            c.drawText("con servidor web activado", x + w / 2, y + h / 2 + 18 * dp, pTexto);
         }
     }
 

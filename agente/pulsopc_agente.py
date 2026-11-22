@@ -18,6 +18,7 @@ Uso:  python pulsopc_agente.py [--puerto 47801]
 
 import argparse
 import json
+import os
 import platform
 import shutil
 import socket
@@ -42,7 +43,8 @@ def leer_gpu_nvidia():
     exe = shutil.which("nvidia-smi")
     if not exe:
         return []
-    campos = "name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,fan.speed"
+    campos = ("name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,fan.speed,"
+              "clocks.gr,clocks.mem,power.limit")
     try:
         flags = 0x08000000 if platform.system() == "Windows" else 0  # sin ventana
         out = subprocess.run(
@@ -54,7 +56,7 @@ def leer_gpu_nvidia():
     gpus = []
     for linea in out.strip().splitlines():
         p = [x.strip() for x in linea.split(",")]
-        if len(p) < 7:
+        if len(p) < 10:
             continue
 
         def num(v):
@@ -71,6 +73,9 @@ def leer_gpu_nvidia():
             "temp": num(p[4]),
             "consumo_w": num(p[5]),
             "ventilador": num(p[6]),
+            "reloj_mhz": num(p[7]),
+            "reloj_mem_mhz": num(p[8]),
+            "limite_w": num(p[9]),
         })
     return gpus
 
@@ -94,7 +99,7 @@ def leer_lhm():
         return None
     hojas = []
     _recorrer_lhm(datos, [], hojas)
-    temps, fans = [], []
+    temps, fans, consumos = [], [], []
     for ruta, valor in hojas:
         grupo = ruta[-2] if len(ruta) >= 2 else ""
         disp = ruta[-3] if len(ruta) >= 3 else ""
@@ -106,7 +111,9 @@ def leer_lhm():
             temps.append({"dispositivo": disp, "sensor": ruta[-1], "valor": v})
         elif grupo == "Fans":
             fans.append({"dispositivo": disp, "sensor": ruta[-1], "rpm": v})
-    return {"temperaturas": temps, "ventiladores": fans}
+        elif grupo == "Powers":
+            consumos.append({"dispositivo": disp, "sensor": ruta[-1], "w": v})
+    return {"temperaturas": temps, "ventiladores": fans, "consumos": consumos}
 
 
 def leer_temps_psutil():
@@ -156,9 +163,9 @@ class Muestreador:
 
         lhm = leer_lhm()
         if lhm:
-            temps, fans = lhm["temperaturas"], lhm["ventiladores"]
+            temps, fans, consumos = lhm["temperaturas"], lhm["ventiladores"], lhm["consumos"]
         else:
-            temps, fans = leer_temps_psutil(), []
+            temps, fans, consumos = leer_temps_psutil(), [], []
 
         stats = {
             "equipo": socket.gethostname(),
@@ -184,6 +191,7 @@ class Muestreador:
             },
             "temperaturas": temps,
             "ventiladores": fans,
+            "consumos": consumos,
             "fuente_temps": "LibreHardwareMonitor" if lhm else "psutil",
         }
         self.t, self.red, self.disco = ahora, red, disco
@@ -213,6 +221,51 @@ def bucle_anuncio(puerto_http):
         except Exception:
             pass
         time.sleep(2)
+
+
+def buscar_adb():
+    exe = shutil.which("adb")
+    if exe:
+        return exe
+    for base in (os.environ.get("LOCALAPPDATA"), os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT")):
+        if not base:
+            continue
+        for sub in (("Android", "Sdk", "platform-tools"), ("platform-tools",)):
+            c = os.path.join(base, *sub, "adb.exe" if platform.system() == "Windows" else "adb")
+            if os.path.isfile(c):
+                return c
+    junto = os.path.join(os.path.dirname(os.path.abspath(__file__)), "platform-tools", "adb.exe")
+    return junto if os.path.isfile(junto) else None
+
+
+def bucle_usb(puerto_http):
+    """Conexion por cable: con 'adb reverse' el movil ve el agente en 127.0.0.1.
+
+    Requiere la depuracion USB activada en el movil. Se repite cada 5 s para
+    cubrir conexiones y desconexiones del cable.
+    """
+    adb = buscar_adb()
+    if not adb:
+        print("  USB: no encuentro adb (instala Android Platform Tools); solo Wi-Fi.")
+        return
+    flags = 0x08000000 if platform.system() == "Windows" else 0
+    regla = "tcp:%d" % puerto_http
+    avisado = set()
+    while True:
+        try:
+            out = subprocess.run([adb, "devices"], capture_output=True, text=True,
+                                 timeout=5, creationflags=flags).stdout
+            serials = [l.split()[0] for l in out.splitlines()[1:] if l.strip().endswith("device")]
+            for sn in serials:
+                subprocess.run([adb, "-s", sn, "reverse", regla, regla], capture_output=True,
+                               timeout=5, creationflags=flags)
+                if sn not in avisado:
+                    print("  USB: movil %s conectado por cable." % sn)
+                    avisado.add(sn)
+            avisado &= set(serials)
+        except Exception:
+            pass
+        time.sleep(5)
 
 
 # ------------------------------------------------------------------- HTTP --
@@ -281,11 +334,12 @@ def main():
 
     threading.Thread(target=bucle_muestreo, args=(a.intervalo,), daemon=True).start()
     threading.Thread(target=bucle_anuncio, args=(a.puerto,), daemon=True).start()
+    threading.Thread(target=bucle_usb, args=(a.puerto,), daemon=True).start()
 
     srv = ThreadingHTTPServer(("0.0.0.0", a.puerto), Manejador)
     print("PulsoPC agente en marcha.")
     print("  Panel web: http://%s:%d/" % (ip_local(), a.puerto))
-    print("  La app del movil lo encontrara sola si estais en la misma Wi-Fi.")
+    print("  Wi-Fi: la app del movil lo encontrara sola en la misma red.")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

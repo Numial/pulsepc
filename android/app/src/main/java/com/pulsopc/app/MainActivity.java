@@ -36,6 +36,8 @@ public class MainActivity extends Activity {
     static final int PUERTO_DESCUBRIMIENTO = 47800;
     static final int PUERTO_HTTP = 47801;
     static final long INTERVALO_MS = 1000;
+    /** Por cable: el agente hace "adb reverse" y el PC aparece en el propio movil. */
+    static final String HOST_USB = "127.0.0.1:" + PUERTO_HTTP;
 
     private PanelView panel;
     private SharedPreferences prefs;
@@ -55,6 +57,9 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("pulsopc", MODE_PRIVATE);
         host = prefs.getString("host", null);
 
+        panel.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { panel.siguientePagina(); }
+        });
         panel.setOnLongClickListener(new View.OnLongClickListener() {
             @Override public boolean onLongClick(View v) { pedirIp(); return true; }
         });
@@ -120,7 +125,7 @@ public class MainActivity extends Activity {
                     if (!"pulsopc".equals(j.optString("app"))) continue;
                     String nuevo = p.getAddress().getHostAddress() + ":" + j.optInt("puerto", PUERTO_HTTP);
                     // Solo adoptamos el anuncio si no tenemos host o el actual no responde.
-                    if (host == null || !panel.conectado()) {
+                    if (host == null || actual == null) {
                         host = nuevo;
                         prefs.edit().putString("host", nuevo).apply();
                     }
@@ -136,20 +141,39 @@ public class MainActivity extends Activity {
     // --------------------------------------------------------------- sondeo --
 
     private void bucleSondeo() {
+        int ciclo = 0;
         while (activo) {
             long t0 = System.currentTimeMillis();
-            final String h = host;
-            if (h == null) {
-                publicar(null, "Buscando el PC en la Wi-Fi...\nMantén pulsado para escribir la IP.");
-            } else {
-                try {
-                    JSONObject j = new JSONObject(pedir("http://" + h + "/stats"));
-                    if (j.has("cpu")) publicar(j, null);
-                    else publicar(null, "Conectado a " + h + ", esperando datos...");
-                } catch (Exception e) {
-                    publicar(null, "Sin respuesta de " + h + "\nMantén pulsado para cambiar la IP.");
-                }
+            ciclo++;
+            JSONObject j = null;
+            String via = null;
+
+            // 1) USB primero: es lo mas estable. Si ya estamos por USB, se usa siempre;
+            //    si estamos por Wi-Fi, se comprueba cada 5 s por si se ha enchufado el cable.
+            boolean probarUsb = HOST_USB.equals(actual) || actual == null || ciclo % 5 == 0;
+            if (probarUsb) {
+                j = intentar(HOST_USB, HOST_USB.equals(actual) ? 1500 : 400);
+                if (j != null) via = HOST_USB;
             }
+            // 2) Wi-Fi: la IP descubierta o escrita a mano.
+            final String h = host;
+            if (j == null && h != null && !h.equals(HOST_USB)) {
+                j = intentar(h, 1500);
+                if (j != null) via = h;
+            }
+
+            actual = via;
+            if (j != null && j.has("cpu")) {
+                panel.setConexion(HOST_USB.equals(via) ? "USB" : "Wi-Fi " + via.split(":")[0]);
+                publicar(j, null);
+            } else if (j != null) {
+                publicar(null, "Conectado, esperando datos...");
+            } else if (h == null) {
+                publicar(null, "Buscando el PC (Wi-Fi o cable USB)...\nMantén pulsado para escribir la IP.");
+            } else {
+                publicar(null, "Sin respuesta de " + h + " ni por USB\nMantén pulsado para cambiar la IP.");
+            }
+
             long espera = INTERVALO_MS - (System.currentTimeMillis() - t0);
             if (espera > 0) {
                 try { Thread.sleep(espera); } catch (InterruptedException e) { return; }
@@ -157,9 +181,19 @@ public class MainActivity extends Activity {
         }
     }
 
-    private static String pedir(String url) throws Exception {
+    private volatile String actual;
+
+    private static JSONObject intentar(String h, int timeoutMs) {
+        try {
+            return new JSONObject(pedir("http://" + h + "/stats", timeoutMs));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String pedir(String url, int timeoutMs) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-        c.setConnectTimeout(1500);
+        c.setConnectTimeout(timeoutMs);
         c.setReadTimeout(1500);
         c.setUseCaches(false);
         try {
@@ -192,7 +226,7 @@ public class MainActivity extends Activity {
         if (host != null) campo.setText(host);
         new AlertDialog.Builder(this)
                 .setTitle("IP del PC")
-                .setMessage("La ves en la ventana del agente al arrancarlo.")
+                .setMessage("La ves en la ventana del agente al arrancarlo. Por cable USB no hace falta.")
                 .setView(campo)
                 .setPositiveButton("Guardar", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
