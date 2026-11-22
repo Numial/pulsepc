@@ -205,6 +205,36 @@ def quitar_acceso_antiguo():
         pass
 
 
+def crear_accesos():
+    """Accesos directos "PulsePC" con su icono en el Escritorio (solo la primera vez, por si
+    luego lo borras) y en el menu Inicio. Sustituyen al PulsePC.bat del Escritorio, que se
+    veia con el icono generico de los .bat."""
+    import subprocess
+    marca = os.path.join(DIR, ".acceso_escritorio")
+    bat = os.path.join(DIR, "iniciar_agente.bat").replace("'", "''")
+    ico = os.path.join(DIR, "pulsepc.ico").replace("'", "''")
+    d = DIR.replace("'", "''")
+    escritorio = "$false" if os.path.exists(marca) else "$true"
+    script = (
+        "$w = New-Object -ComObject WScript.Shell;"
+        "$dirs = @([Environment]::GetFolderPath('Programs'));"
+        "if (%s) { $dirs += [Environment]::GetFolderPath('Desktop') };"
+        "foreach ($dir in $dirs) {"
+        "  $l = $w.CreateShortcut((Join-Path $dir 'PulsePC.lnk'));"
+        "  $l.TargetPath = '%s'; $l.WorkingDirectory = '%s'; $l.IconLocation = '%s,0';"
+        "  $l.WindowStyle = 7; $l.Description = 'PulsePC'; $l.Save() };"
+        "$viejo = Join-Path ([Environment]::GetFolderPath('Desktop')) 'PulsePC.bat';"
+        "if ((Test-Path $viejo) -and ((Get-Content $viejo -Raw) -match 'iniciar_agente|pulsopc_bandeja')) { Remove-Item $viejo };"
+        "[Environment]::GetFolderPath('Desktop')"
+    ) % (escritorio, bat, d, ico)
+    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                       capture_output=True, text=True, errors="replace", timeout=30, creationflags=SIN_VENTANA)
+    if r.returncode == 0:
+        open(marca, "w").close()
+    else:
+        logging.info("No pude crear los accesos directos: %s", (r.stderr or "").strip()[:300])
+
+
 # ------------------------------------------------------------------- main --
 
 def main():
@@ -229,6 +259,10 @@ def main():
     es_windows = os.name == "nt"
     if es_windows:
         quitar_acceso_antiguo()
+        try:
+            crear_accesos()
+        except Exception as e:
+            logging.info("Accesos directos: %s", e)
         try:
             migrar_nombre_antiguo()
         except Exception as e:

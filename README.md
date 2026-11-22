@@ -18,6 +18,7 @@ Requiere Python 3.8+.
 
 1. Doble clic en `agente/iniciar_agente.bat`. Instala lo necesario (`psutil`, `pystray`, `pillow`), cierra su ventana y deja **PulsePC en la bandeja**, junto al reloj (puede estar dentro de la flechita ^).
 2. La primera vez, Windows pedirá permiso en el firewall: permite **redes privadas**.
+   PulsePC crea además un acceso directo **PulsePC** con su icono en el Escritorio y en el menú Inicio.
 3. Desde el icono: *Personalizar el móvil*, *Ver panel web*, *Arrancar con Windows* y *Salir*. El icono se pone verde cuando el móvil está leyendo datos.
 
 **Arranque automático:** la primera vez se activa *Arrancar con Windows*. PulsePC queda esperando con muy poco consumo (lee el PC cada 5 s mientras no hay móvil) y, en cuanto enchufas el móvil por USB, le abre la app y te avisa con una notificación. Se puede desactivar desde el menú del icono.
