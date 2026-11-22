@@ -218,8 +218,21 @@ public class MainActivity extends Activity {
             @Override public void run() {
                 if (datos != null) panel.actualizar(datos);
                 else panel.aviso(aviso);
+                ajustarBrillo();
             }
         });
+    }
+
+    private boolean atenuado;
+
+    /** Con el PC apagado se baja el brillo al minimo; al volver los datos, brillo normal. */
+    private void ajustarBrillo() {
+        boolean apagar = panel.pcApagado();
+        if (apagar == atenuado) return;
+        atenuado = apagar;
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = apagar ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+        getWindow().setAttributes(lp);
     }
 
     // ------------------------------------------------------------ IP manual --

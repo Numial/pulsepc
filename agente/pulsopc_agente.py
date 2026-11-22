@@ -53,45 +53,218 @@ def movil_conectado():
 
 # ---------------------------------------------------------------- lectores --
 
-def leer_gpu_nvidia():
+# ----------------------------------------------------------- GPU NVIDIA --
+# nvidia-smi se deja abierto en modo continuo (-lms) en vez de lanzarlo cada
+# segundo: gasta mucho menos CPU.
+
+CAMPOS_GPU = ("index,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,"
+              "fan.speed,clocks.gr,clocks.mem,power.limit")
+_gpu = {"datos": {}, "t": 0.0}
+SIN_VENTANA = 0x08000000 if platform.system() == "Windows" else 0
+
+
+def _num(v):
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
+def _parsear_gpu(linea):
+    p = [x.strip() for x in linea.split(",")]
+    if len(p) < 11:
+        return None
+    return p[0], {
+        "nombre": p[1], "uso": _num(p[2]), "vram_usada_mb": _num(p[3]), "vram_total_mb": _num(p[4]),
+        "temp": _num(p[5]), "consumo_w": _num(p[6]), "ventilador": _num(p[7]),
+        "reloj_mhz": _num(p[8]), "reloj_mem_mhz": _num(p[9]), "limite_w": _num(p[10]),
+    }
+
+
+def bucle_gpu():
     exe = shutil.which("nvidia-smi")
     if not exe:
+        return
+    while True:
+        try:
+            proc = subprocess.Popen([exe, "--query-gpu=" + CAMPOS_GPU, "--format=csv,noheader,nounits",
+                                     "-lms", "1000"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                    text=True, creationflags=SIN_VENTANA)
+            _procesos.append(proc)
+            for linea in proc.stdout:
+                r = _parsear_gpu(linea)
+                if r:
+                    _gpu["datos"][r[0]] = r[1]
+                    _gpu["t"] = time.time()
+        except Exception as e:
+            print("nvidia-smi:", e)
+        time.sleep(10)  # si nvidia-smi se cae, reintentar
+
+
+def leer_gpu_nvidia():
+    if time.time() - _gpu["t"] > 5:
         return []
-    campos = ("name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,fan.speed,"
-              "clocks.gr,clocks.mem,power.limit")
+    return [_gpu["datos"][k] for k in sorted(_gpu["datos"])]
+
+
+# ------------------------------------------- LibreHardwareMonitor (integrado) --
+# Se descarga LibreHardwareMonitorLib (build .NET Framework) a agente/lhm/ y se lee
+# con lhm_sensores.ps1 en Windows PowerShell. Sin la app de LHM ni su servidor web.
+
+DIR_AGENTE = os.path.dirname(os.path.abspath(__file__))
+LHM_DIR = os.path.join(DIR_AGENTE, "lhm")
+LHM_API = "https://api.github.com/repos/LibreHardwareMonitor/LibreHardwareMonitor/releases/latest"
+_lhm = {"sensores": [], "t": 0.0}
+_procesos = []
+estado_lhm = {"texto": "Sensores: arrancando"}
+
+
+def pawnio_instalado():
+    """Driver que usa LibreHardwareMonitor (desde 0.9.5) para leer la CPU."""
+    if platform.system() != "Windows":
+        return True
     try:
-        flags = 0x08000000 if platform.system() == "Windows" else 0  # sin ventana
-        out = subprocess.run(
-            [exe, "--query-gpu=" + campos, "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=3, creationflags=flags,
-        ).stdout
+        out = subprocess.run(["sc", "query", "PawnIO"], capture_output=True, text=True,
+                             timeout=5, creationflags=SIN_VENTANA)
+        return out.returncode == 0
     except Exception:
-        return []
-    gpus = []
-    for linea in out.strip().splitlines():
-        p = [x.strip() for x in linea.split(",")]
-        if len(p) < 10:
-            continue
+        return False
 
-        def num(v):
-            try:
-                return float(v)
-            except ValueError:
-                return None
 
-        gpus.append({
-            "nombre": p[0],
-            "uso": num(p[1]),
-            "vram_usada_mb": num(p[2]),
-            "vram_total_mb": num(p[3]),
-            "temp": num(p[4]),
-            "consumo_w": num(p[5]),
-            "ventilador": num(p[6]),
-            "reloj_mhz": num(p[7]),
-            "reloj_mem_mhz": num(p[8]),
-            "limite_w": num(p[9]),
-        })
-    return gpus
+def es_admin():
+    if platform.system() != "Windows":
+        return os.geteuid() == 0 if hasattr(os, "geteuid") else False
+    try:
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def asegurar_lhm():
+    """Descarga LibreHardwareMonitorLib.dll y sus dependencias si no estan."""
+    if os.path.isfile(os.path.join(LHM_DIR, "LibreHardwareMonitorLib.dll")):
+        return True
+    import io
+    import zipfile
+    estado_lhm["texto"] = "Sensores: descargando LibreHardwareMonitor..."
+    req = urllib.request.Request(LHM_API, headers={"User-Agent": "PulsoPC",
+                                                   "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        rel = json.load(r)
+    zips = [a for a in rel.get("assets", []) if a["name"].lower().endswith(".zip")]
+    if not zips:
+        raise RuntimeError("la release %s no trae .zip" % rel.get("tag_name"))
+    # Preferimos la build para .NET Framework (la que carga Windows PowerShell 5.1)
+    # (en v0.9.6: "LibreHardwareMonitor.zip" es net472 y "LibreHardwareMonitor.NET.10.zip" no sirve)
+    zips.sort(key=lambda a: (0 if ("net4" in a["name"].lower() or "framework" in a["name"].lower()) else 1,
+                             1 if ".net." in a["name"].lower() else 0, len(a["name"])))
+    asset = zips[0]
+    with urllib.request.urlopen(urllib.request.Request(asset["browser_download_url"],
+                                                       headers={"User-Agent": "PulsoPC"}), timeout=120) as r:
+        datos = r.read()
+    z = zipfile.ZipFile(io.BytesIO(datos))
+    dlls = [n for n in z.namelist() if n.lower().endswith(".dll")]
+    # Si el zip trae varias builds en carpetas, nos quedamos con la de .NET Framework
+    marcos = [n for n in dlls if "net4" in n.lower()]
+    if marcos:
+        dlls = marcos
+    os.makedirs(LHM_DIR, exist_ok=True)
+    for n in dlls:
+        destino = os.path.join(LHM_DIR, os.path.basename(n))
+        with z.open(n) as fo, open(destino, "wb") as fd:
+            fd.write(fo.read())
+    with open(os.path.join(LHM_DIR, "VERSION.txt"), "w") as f:
+        f.write("%s %s\n" % (rel.get("tag_name"), asset["name"]))
+    avisar("LibreHardwareMonitor %s listo para leer sensores." % rel.get("tag_name"))
+    return os.path.isfile(os.path.join(LHM_DIR, "LibreHardwareMonitorLib.dll"))
+
+
+def bucle_lhm():
+    if platform.system() != "Windows":
+        return
+    script = os.path.join(DIR_AGENTE, "lhm_sensores.ps1")
+    espera = 5
+    while True:
+        try:
+            if not asegurar_lhm():
+                raise RuntimeError("no encuentro LibreHardwareMonitorLib.dll")
+            proc = subprocess.Popen(
+                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                 "-File", script, "-Dir", LHM_DIR],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                creationflags=SIN_VENTANA)
+            _procesos.append(proc)
+            for linea in proc.stdout:
+                try:
+                    j = json.loads(linea.lstrip("\ufeff"))
+                except ValueError:
+                    continue
+                if "error" in j:
+                    raise RuntimeError(j["error"])
+                _lhm["sensores"] = j.get("sensores") or []
+                _lhm["t"] = time.time()
+                hay_cpu = any(x["tipo_hw"] == "Cpu" and x["tipo"] == "Temperature" for x in _lhm["sensores"])
+                if hay_cpu:
+                    estado_lhm["texto"] = "Sensores: OK (LibreHardwareMonitor)"
+                elif not es_admin():
+                    estado_lhm["texto"] = "Sensores: sin temperatura de CPU (hace falta administrador)"
+                elif not pawnio_instalado():
+                    estado_lhm["texto"] = "Sensores: falta el driver PawnIO para la CPU"
+                else:
+                    estado_lhm["texto"] = "Sensores: la CPU no da temperatura"
+                espera = 5
+            raise RuntimeError("el lector de sensores se ha cerrado")
+        except Exception as e:
+            estado_lhm["texto"] = "Sensores: error (%s)" % e
+            print("LibreHardwareMonitor:", e)
+        time.sleep(espera)
+        espera = min(espera * 2, 300)
+
+
+def _cerrar_procesos():
+    for p in _procesos:
+        try:
+            p.kill()
+        except Exception:
+            pass
+
+
+import atexit  # noqa: E402
+atexit.register(_cerrar_procesos)
+
+PRIORIDAD_CPU_TEMP = ("CPU Package", "Core (Tctl/Tdie)", "Core (Tctl)", "Tctl/Tdie", "Core Average", "Core Max")
+
+
+def datos_lhm_integrado():
+    if time.time() - _lhm["t"] > 5:
+        return None
+    sens = _lhm["sensores"]
+    orden_hw = {"Cpu": 0, "GpuNvidia": 1, "GpuAmd": 1, "GpuIntel": 1, "Motherboard": 2, "SuperIO": 2,
+                "Storage": 3, "Memory": 4}
+    temps, fans, consumos = [], [], []
+    for x in sorted(sens, key=lambda x: orden_hw.get(x["tipo_hw"], 5)):
+        if x["tipo"] == "Temperature" and 0 < x["valor"] < 150:
+            temps.append({"dispositivo": x["hw"], "sensor": x["nombre"], "valor": x["valor"]})
+        elif x["tipo"] == "Fan" and x["valor"] > 0:
+            fans.append({"dispositivo": x["hw"], "sensor": x["nombre"], "rpm": x["valor"]})
+        elif x["tipo"] == "Power" and x["valor"] > 0:
+            consumos.append({"dispositivo": x["hw"], "sensor": x["nombre"], "w": x["valor"]})
+    cpu_t = [x for x in sens if x["tipo_hw"] == "Cpu" and x["tipo"] == "Temperature"]
+    cpu_temp = None
+    for nombre in PRIORIDAD_CPU_TEMP:
+        m = [x for x in cpu_t if x["nombre"] == nombre]
+        if m:
+            cpu_temp = m[0]["valor"]
+            break
+    if cpu_temp is None and cpu_t:
+        cpu_temp = max(x["valor"] for x in cpu_t)
+    cpu_w = next((x["valor"] for x in sens if x["tipo_hw"] == "Cpu" and x["tipo"] == "Power"
+                  and "Package" in x["nombre"]), None)
+    # Las temperaturas de la CPU van primero, con la principal en cabeza
+    temps.sort(key=lambda t: (0 if t["valor"] == cpu_temp and t["dispositivo"] in [c["hw"] for c in cpu_t] else 1))
+    return {"temperaturas": temps, "ventiladores": fans, "consumos": consumos,
+            "cpu_temp": cpu_temp, "cpu_w": cpu_w}
 
 
 def _recorrer_lhm(nodo, ruta, salida):
@@ -175,11 +348,18 @@ class Muestreador:
             unidades.append({"unidad": p.mountpoint, "usado_gb": u.used / 1e9,
                              "total_gb": u.total / 1e9, "porcentaje": u.percent})
 
-        lhm = leer_lhm()
+        lhm = datos_lhm_integrado()
+        fuente = "LibreHardwareMonitor integrado"
+        if not lhm:
+            lhm = leer_lhm()   # la app LibreHardwareMonitor con servidor web, si esta abierta
+            fuente = "LibreHardwareMonitor (servidor web)"
         if lhm:
             temps, fans, consumos = lhm["temperaturas"], lhm["ventiladores"], lhm["consumos"]
         else:
             temps, fans, consumos = leer_temps_psutil(), [], []
+            fuente = "psutil"
+        cpu_temp = lhm.get("cpu_temp") if lhm else None
+        cpu_w = lhm.get("cpu_w") if lhm else None
 
         stats = {
             "equipo": socket.gethostname(),
@@ -191,6 +371,8 @@ class Muestreador:
                 "uso": sum(nucleos) / len(nucleos) if nucleos else 0,
                 "nucleos": nucleos,
                 "freq_mhz": freq.current if freq else None,
+                "temp": cpu_temp,
+                "consumo_w": cpu_w,
             },
             "ram": {"usada_gb": vm.used / 1e9, "total_gb": vm.total / 1e9, "porcentaje": vm.percent},
             "gpu": leer_gpu_nvidia(),
@@ -206,7 +388,7 @@ class Muestreador:
             "temperaturas": temps,
             "ventiladores": fans,
             "consumos": consumos,
-            "fuente_temps": "LibreHardwareMonitor" if lhm else "psutil",
+            "fuente_temps": fuente,
         }
         self.t, self.red, self.disco = ahora, red, disco
         return stats
@@ -543,6 +725,8 @@ def arrancar(puerto=PUERTO_HTTP, intervalo=1.0, mantener_app=True):
     Lanza OSError si el puerto ya esta en uso (otro agente abierto)."""
     srv = Servidor(("0.0.0.0", puerto), Manejador)
     cargar_diseno()
+    threading.Thread(target=bucle_gpu, daemon=True).start()
+    threading.Thread(target=bucle_lhm, daemon=True).start()
     threading.Thread(target=bucle_muestreo, args=(intervalo,), daemon=True).start()
     threading.Thread(target=bucle_anuncio, args=(puerto,), daemon=True).start()
     threading.Thread(target=bucle_usb, args=(puerto, mantener_app), daemon=True).start()

@@ -10,8 +10,8 @@ android {
         applicationId 'com.pulsopc.app'
         minSdk 23          // Android 6.0 Marshmallow
         targetSdk 34
-        versionCode 3
-        versionName '0.3'
+        versionCode 4
+        versionName '0.4'
     }
 
     buildTypes {

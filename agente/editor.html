@@ -145,7 +145,7 @@ function valor(t){
   const s=stats;if(!s.cpu)return["–",null];
   const g=(s.gpu||[])[0];const f=(x,d=0)=>x==null?"–":Number(x).toFixed(d);
   switch(t){
-    case"cpu":return[f(s.cpu.uso)+" %",s.cpu.uso];
+    case"cpu":return[f(s.cpu.uso)+" %"+(s.cpu.temp!=null?" · "+f(s.cpu.temp)+" °C":""),s.cpu.uso];
     case"ram":return[f(s.ram.usada_gb,1)+" / "+f(s.ram.total_gb,0)+" GB",s.ram.porcentaje];
     case"gpu":return g?[f(g.uso)+" % · "+f(g.temp)+" °C",g.uso]:["Sin GPU",null];
     case"gpu_detalle":return g?[f(g.reloj_mhz)+" MHz · "+f(g.consumo_w)+" W",null]:["Sin GPU",null];

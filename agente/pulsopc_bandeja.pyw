@@ -64,17 +64,63 @@ ICONO_OFF = dibujar_icono((120, 128, 140, 255))
 
 
 # --------------------------------------------------- arrancar con Windows --
+# Con permisos de administrador se usa una tarea programada "al iniciar sesion"
+# con privilegios altos: arranca elevado SIN aviso de UAC, y asi
+# LibreHardwareMonitor puede leer la temperatura de la CPU.
+# Sin permisos, se usa la clave Run del registro (sin temperatura de CPU).
 
-def comando_arranque():
+SIN_VENTANA = 0x08000000
+
+
+def pythonw():
     exe = sys.executable
     if exe.lower().endswith("python.exe"):
         w = exe[:-len("python.exe")] + "pythonw.exe"
         if os.path.isfile(w):
             exe = w
-    return '"%s" "%s"' % (exe, os.path.join(DIR, "pulsopc_bandeja.pyw"))
+    return exe
 
 
-def arranque_activado():
+def comando_arranque():
+    return '"%s" "%s"' % (pythonw(), os.path.join(DIR, "pulsopc_bandeja.pyw"))
+
+
+def _ps(script):
+    import subprocess
+    return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                          capture_output=True, text=True, timeout=30, creationflags=SIN_VENTANA)
+
+
+def tarea_existe():
+    import subprocess
+    r = subprocess.run(["schtasks", "/Query", "/TN", NOMBRE_RUN], capture_output=True,
+                       creationflags=SIN_VENTANA)
+    return r.returncode == 0
+
+
+def crear_tarea():
+    exe = pythonw().replace("'", "''")
+    arg = ('"%s"' % os.path.join(DIR, "pulsopc_bandeja.pyw")).replace("'", "''")
+    d = DIR.replace("'", "''")
+    r = _ps(
+        "$a = New-ScheduledTaskAction -Execute '%s' -Argument '%s' -WorkingDirectory '%s';"
+        "$t = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;"
+        "$p = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest;"
+        "$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries "
+        "-ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew;"
+        "Register-ScheduledTask -TaskName '%s' -Action $a -Trigger $t -Principal $p -Settings $s -Force | Out-Null"
+        % (exe, arg, d, NOMBRE_RUN))
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.strip()[:200])
+
+
+def borrar_tarea():
+    import subprocess
+    subprocess.run(["schtasks", "/Delete", "/TN", NOMBRE_RUN, "/F"], capture_output=True,
+                   creationflags=SIN_VENTANA)
+
+
+def run_existe():
     try:
         import winreg
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, CLAVE_RUN) as k:
@@ -84,7 +130,7 @@ def arranque_activado():
         return False
 
 
-def poner_arranque(activar):
+def poner_run(activar):
     import winreg
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, CLAVE_RUN, 0, winreg.KEY_SET_VALUE) as k:
         if activar:
@@ -94,6 +140,35 @@ def poner_arranque(activar):
                 winreg.DeleteValue(k, NOMBRE_RUN)
             except OSError:
                 pass
+
+
+def arranque_activado():
+    return tarea_existe() or run_existe()
+
+
+def poner_arranque(activar):
+    if not activar:
+        poner_run(False)
+        if tarea_existe():
+            if agente.es_admin():
+                borrar_tarea()
+            else:
+                ejecutar_elevado(["schtasks", "/Delete", "/TN", NOMBRE_RUN, "/F"])
+        return
+    if agente.es_admin():
+        crear_tarea()
+        poner_run(False)   # la tarea sustituye a la clave Run
+    else:
+        poner_run(True)
+
+
+def ejecutar_elevado(cmd, args_lista=None):
+    """Lanza un programa pidiendo permisos de administrador (aviso de UAC)."""
+    import ctypes
+    import subprocess
+    exe = cmd[0]
+    params = subprocess.list2cmdline(cmd[1:])
+    return ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, DIR, 1) > 32
 
 
 def quitar_acceso_antiguo():
@@ -110,24 +185,38 @@ def quitar_acceso_antiguo():
 # ------------------------------------------------------------------- main --
 
 def main():
-    try:
-        agente.arrancar()
-    except OSError:
-        # Ya hay un PulsoPC abierto: abrimos el editor y salimos sin duplicar.
-        webbrowser.open("http://localhost:%d/editor" % agente.PUERTO_HTTP)
-        return
+    # Lanzado desde iniciar_agente.bat: pedimos permisos de administrador una vez
+    # (para la temperatura de la CPU). Si se rechaza el aviso, sigue sin ellos.
+    if "--elevar" in sys.argv and os.name == "nt" and not agente.es_admin():
+        if ejecutar_elevado([pythonw(), os.path.join(DIR, "pulsopc_bandeja.pyw"), "--esperar"]):
+            return
+    intentos = 20 if "--esperar" in sys.argv else 1
+    for i in range(intentos):
+        try:
+            agente.arrancar()
+            break
+        except OSError:
+            if i < intentos - 1:
+                time.sleep(0.5)
+                continue
+            # Ya hay un PulsoPC abierto: abrimos el editor y salimos sin duplicar.
+            webbrowser.open("http://localhost:%d/editor" % agente.PUERTO_HTTP)
+            return
 
     es_windows = os.name == "nt"
     if es_windows:
         quitar_acceso_antiguo()
         marca = os.path.join(DIR, ".arranque_configurado")
-        if not os.path.exists(marca):
-            # Primera vez: se activa solo el arranque con Windows (se puede quitar en el menu).
-            try:
+        try:
+            if not os.path.exists(marca):
+                # Primera vez: se activa solo el arranque con Windows (se puede quitar en el menu).
                 poner_arranque(True)
                 open(marca, "w").close()
-            except Exception as e:
-                logging.info("No pude activar el arranque con Windows: %s", e)
+            elif agente.es_admin() and run_existe() and not tarea_existe():
+                # Ya estaba activado sin permisos: lo pasamos a tarea elevada.
+                poner_arranque(True)
+        except Exception as e:
+            logging.info("No pude configurar el arranque con Windows: %s", e)
 
     url = "http://localhost:%d" % agente.PUERTO_HTTP
 
@@ -135,9 +224,29 @@ def main():
         poner_arranque(not arranque_activado())
 
     def salir(icon, item):
+        agente._cerrar_procesos()
         icon.stop()
 
+    def reiniciar_admin(icon, item):
+        # Se lanza otra copia elevada; esta se cierra para liberar el puerto.
+        if ejecutar_elevado([pythonw(), os.path.join(DIR, "pulsopc_bandeja.pyw"), "--esperar"]):
+            salir(icon, item)
+
+    def instalar_pawnio(icon, item):
+        ejecutar_elevado(["winget", "install", "--id", "namazso.PawnIO", "-e",
+                          "--accept-package-agreements", "--accept-source-agreements"])
+        avisar_local("Instalando el driver PawnIO. Cuando termine, reinicia PulsoPC.")
+
+    def avisar_local(t):
+        agente.estado["avisos"].append(t)
+
     menu = pystray.Menu(
+        pystray.MenuItem(lambda it: agente.estado_lhm["texto"], None, enabled=False),
+        pystray.MenuItem("Reiniciar como administrador (temperatura de CPU)", reiniciar_admin,
+                         visible=lambda it: es_windows and not agente.es_admin()),
+        pystray.MenuItem("Instalar driver de sensores (PawnIO)", instalar_pawnio,
+                         visible=lambda it: es_windows and agente.es_admin() and not agente.pawnio_instalado()),
+        pystray.Menu.SEPARATOR,
         pystray.MenuItem("Personalizar el móvil", lambda i, it: webbrowser.open(url + "/editor"), default=True),
         pystray.MenuItem("Ver panel web", lambda i, it: webbrowser.open(url + "/")),
         pystray.Menu.SEPARATOR,

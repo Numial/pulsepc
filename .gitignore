@@ -9,3 +9,4 @@ local.properties
 agente/pulsopc_config.json
 agente/pulsopc.log
 agente/.arranque_configurado
+agente/lhm/

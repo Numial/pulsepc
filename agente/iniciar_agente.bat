@@ -43,5 +43,6 @@ if errorlevel 1 (
   exit /b 1
 )
 rem Arranca en segundo plano: aparece el icono junto al reloj y esta ventana se cierra.
-start "" %PYW% "%~dp0pulsopc_bandeja.pyw"
+rem Windows pedira permiso de administrador una vez (para leer la temperatura de la CPU).
+start "" %PYW% "%~dp0pulsopc_bandeja.pyw" --elevar
 exit /b 0

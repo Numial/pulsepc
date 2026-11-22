@@ -24,9 +24,12 @@ Requiere Python 3.8+.
 
 ¿Prefieres verlo en una ventana de consola para depurar? Usa `agente/iniciar_agente_consola.bat`. El registro del modo bandeja está en `agente/pulsopc.log`.
 
-**Temperaturas en Windows:** Windows no las da directamente. Abre [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) como administrador y activa *Options → Remote Web Server → Run* (puerto 8085). El agente las leerá de ahí.
+**Temperaturas, ventiladores y consumos:** PulsoPC lleva [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) integrado. La primera vez descarga su librería oficial en `agente/lhm/` y la lee en segundo plano, sin abrir ninguna app. Para la temperatura de la CPU:
+- PulsoPC tiene que correr **como administrador**. Al abrir `iniciar_agente.bat`, Windows pide permiso una vez y PulsoPC crea una tarea programada que, desde entonces, lo arranca elevado al iniciar sesión **sin más avisos**.
+- LibreHardwareMonitor 0.9.5+ usa el driver **PawnIO**. Si falta, el menú del icono muestra *Instalar driver de sensores (PawnIO)* (o `winget install namazso.PawnIO`).
+- El estado de los sensores aparece en la primera línea del menú del icono.
 
-**GPU:** las tarjetas NVIDIA se leen con `nvidia-smi` (viene con el driver). AMD/Intel: pendiente (se puede sacar de LibreHardwareMonitor).
+**GPU:** las tarjetas NVIDIA se leen con `nvidia-smi` en modo continuo (viene con el driver). AMD/Intel: pendiente (se puede sacar de LibreHardwareMonitor).
 
 ### Conexión por cable USB
 
@@ -47,6 +50,9 @@ Con el agente abierto, abre **`agente/personalizar.bat`** (o `http://localhost:4
 - Por seguridad, el diseño solo se puede cambiar desde el propio PC.
 
 ### Móvil fijo dentro del PC
+
+- **Anti-quemado:** el contenido se desplaza un par de píxeles cada minuto.
+- **PC apagado:** tras 30 s sin datos, el móvil baja el brillo al mínimo y muestra solo un texto discreto que cambia de sitio. Vuelve solo cuando el PC arranca.
 
 - **Arranque del agente con Windows:** activado por defecto desde el icono de la bandeja.
 - **La app se abre sola** al encender el móvil y al recibir corriente por el cable (al encender el PC).

@@ -99,6 +99,11 @@ public class PanelView extends View {
         if (paginas != null && pagina >= paginas.length()) pagina = 0;
     }
 
+    /** Sin datos durante mas de 30 s: el PC esta apagado o el agente cerrado. */
+    public boolean pcApagado() {
+        return s != null && System.currentTimeMillis() - ultimaRespuesta > 30000;
+    }
+
     public boolean conectado() {
         return s != null && System.currentTimeMillis() - ultimaRespuesta < 5000;
     }
@@ -140,11 +145,31 @@ public class PanelView extends View {
     protected void onDraw(Canvas c) {
         int w = getWidth(), h = getHeight();
         c.drawColor(FONDO);
+        // Anti-quemado: la pantalla esta encendida dia y noche, asi que todo el
+        // contenido se desplaza un par de pixeles cada minuto (no se nota a simple vista).
+        int paso = (int) ((System.currentTimeMillis() / 60000) % 4);
+        float desp = 2 * dp;
+        c.translate(paso == 1 || paso == 2 ? desp : 0, paso >= 2 ? desp : 0);
+        w -= (int) desp;
+        h -= (int) desp;
         float m = 8 * dp;
-        boolean conCab = cabecera || s == null;
+        boolean sinDatos = s == null || pcApagado();
+        boolean conCab = cabecera || sinDatos;
         float alturaCab = conCab ? 28 * dp : 0;
 
-        if (conCab) dibujarCabecera(c, m, m, w - 2 * m, alturaCab);
+        if (conCab && !pcApagado()) dibujarCabecera(c, m, m, w - 2 * m, alturaCab);
+
+        if (pcApagado()) {
+            // PC apagado: pantalla casi negra con un texto discreto que cambia de sitio.
+            pTexto.setColor((TEXTO & 0x00FFFFFF) | 0x55000000);
+            pTexto.setTextSize(14 * dp);
+            pTexto.setTextAlign(Paint.Align.CENTER);
+            long t = System.currentTimeMillis() / 30000;
+            float px = w * (0.3f + 0.4f * ((t * 37) % 10) / 10f);
+            float py = h * (0.3f + 0.4f * ((t * 53) % 10) / 10f);
+            c.drawText("PulsoPC · esperando al PC", px, py, pTexto);
+            return;
+        }
 
         if (s == null) {
             pTexto.setColor(TENUE);
@@ -354,7 +379,9 @@ public class PanelView extends View {
         titulo(c, "CPU", x, y, w);
         float uso = (float) cpu.optDouble("uso", 0);
         double f = cpu.optDouble("freq_mhz", Double.NaN);
+        double tc = cpu.optDouble("temp", Double.NaN);
         String sub = Double.isNaN(f) ? null : String.format(Locale.ROOT, "%.2f GHz", f / 1000);
+        if (!Double.isNaN(tc)) sub = Math.round(tc) + " °C" + (sub != null ? "  ·  " + sub : "");
         float grafH = h * 0.22f;
         float radio = Math.min(w, h - grafH - 20 * dp) / 2f * 0.85f;
         anillo(c, x + w / 2, y + 16 * dp + (h - grafH - 16 * dp) / 2, radio, uso,
