@@ -5,7 +5,8 @@ title PulsoPC
 
 rem --- Buscar Python: lanzador "py", "python" real (no el atajo de la Microsoft Store) o rutas habituales ---
 set "PY="
-where py >nul 2>nul && (py -3 -c "import sys" >nul 2>nul && set "PY=py -3")
+set "LANZADOR="
+where py >nul 2>nul && (py -3 -c "import sys" >nul 2>nul && set "PY=py -3" && set "LANZADOR=1")
 if not defined PY (
   for /f "delims=" %%P in ('where python 2^>nul') do (
     if not defined PY (
@@ -30,8 +31,9 @@ if not defined PY (
 )
 
 rem --- Version sin consola (pythonw / pyw) ---
+rem (PY puede venir entre comillas, asi que no se compara su texto: se usa la marca LANZADOR)
 set "PYW=%PY:python.exe=pythonw.exe%"
-if /i "%PY:~0,2%"=="py" set "PYW=pyw -3"
+if defined LANZADOR set "PYW=pyw -3"
 
 echo Preparando PulsoPC (solo la primera vez tarda un poco)...
 %PY% -m pip install --quiet --disable-pip-version-check psutil pystray pillow
