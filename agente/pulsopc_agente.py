@@ -844,7 +844,10 @@ class Manejador(BaseHTTPRequestHandler):
         if self.path.split("?")[0] == "/salir":
             # Cierra el agente (solo desde el propio PC). Sirve para actualizarlo sin
             # tener que usar el menu del icono; luego se relanza con: schtasks /Run /TN PulsoPC
-            if not self.client_address[0].startswith("127."):
+            # Por USB el movil tambien llega como 127.0.0.1, asi que se exige ademas
+            # el token que el agente guarda en agente/.token (solo legible en el PC).
+            if (not self.client_address[0].startswith("127.")
+                    or self.headers.get("X-Token", "") != TOKEN_LOCAL):
                 self._json({"error": "solo desde el PC"}, 403)
                 return
             self._json({"ok": True})
@@ -906,10 +909,25 @@ class Servidor(ThreadingHTTPServer):
         super().server_bind()
 
 
+TOKEN_LOCAL = ""
+
+
+def _crear_token():
+    global TOKEN_LOCAL
+    import secrets
+    TOKEN_LOCAL = secrets.token_hex(16)
+    try:
+        with open(os.path.join(DIR_AGENTE, ".token"), "w") as f:
+            f.write(TOKEN_LOCAL)
+    except OSError:
+        pass
+
+
 def arrancar(puerto=PUERTO_HTTP, intervalo=1.0, mantener_app=True):
     """Arranca todo en hilos y devuelve el servidor HTTP (sin bloquear).
     Lanza OSError si el puerto ya esta en uso (otro agente abierto)."""
     srv = Servidor(("0.0.0.0", puerto), Manejador)
+    _crear_token()
     cargar_diseno()
     threading.Thread(target=bucle_gpu, daemon=True).start()
     threading.Thread(target=bucle_lhm, daemon=True).start()
