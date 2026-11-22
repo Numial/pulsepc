@@ -50,7 +50,9 @@ Con el agente abierto, abre **`agente/personalizar.bat`** (o `http://localhost:4
   **imagen / GIF** (sube una foto o un GIF animado desde el editor; se ve en el móvil y en el Nest Hub)
   y **multimedia**: botones tocables en el móvil para anterior / reproducir-pausa / siguiente y volumen, con lo que suena ahora.
 - **Alerta de temperatura:** si la CPU o la GPU pasan del límite (90 °C por defecto), su tarjeta parpadea en rojo.
-- Elige un tema de colores o ajusta cada color.
+- Elige un tema de colores o ajusta cada color (fondo, tarjetas, texto, **números**…).
+- **Tipografía:** condensada, moderna, fina, gruesa, con serifa, monoespaciada, manuscrita o informal (las del propio Android 6, sin descargar nada en el móvil).
+- **Degradado en las tarjetas:** vertical, horizontal o diagonal, con el segundo color a tu gusto.
 - Se guarda solo en `agente/pulsopc_config.json` y el móvil lo aplica en un segundo, sin reiniciar nada.
 - Por seguridad, el diseño solo se puede cambiar desde el propio PC.
 

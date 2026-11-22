@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PulsePC · Personalizar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;900&family=Roboto+Condensed:wght@400;500&family=Roboto+Mono:wght@400;500&family=Noto+Serif:wght@400;600&family=Dancing+Script:wght@500;700&family=Coming+Soon&display=swap">
 <style>
 :root{--bg:#0b0d11;--panel:#13161c;--borde:#252a33;--texto:#e6e6e6;--tenue:#8c96a4;--acento:#3ec7a0;--alerta:#f0645b}
 *{box-sizing:border-box}
@@ -44,7 +45,7 @@ label{display:flex;align-items:center;justify-content:space-between;gap:8px;marg
 .w.arrastrando{opacity:.4}
 .w.encima{outline:2px dashed var(--c-acento)}
 .w .t{font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.65}
-.w .v{font-size:clamp(14px,2.4vw,28px);margin-top:auto;font-variant-numeric:tabular-nums}
+.w .v{color:var(--c-num);font-weight:var(--peso-num);font-size:clamp(14px,2.4vw,28px);margin-top:auto;font-variant-numeric:tabular-nums}
 .w .b{height:5px;border-radius:3px;margin-top:6px;background:rgba(255,255,255,.08);overflow:hidden}
 .w .b i{display:block;height:100%;background:var(--c-acento)}
 .aviso{color:var(--alerta);font-size:13px}
@@ -106,6 +107,8 @@ body.hub .solo-movil{display:none}
       <h2>Colores</h2>
       <div class="temas" id="temas"></div>
       <div id="colores"></div>
+      <label>Tipografía <select id="fuente"></select></label>
+      <label>Degradado en tarjetas <select id="degradado"></select></label>
       <label>Mostrar cabecera <input type="checkbox" id="cabecera"></label>
       <label>Alerta de temperatura (°C) <input type="number" id="alerta" min="50" max="110"></label>
     </div>
@@ -116,7 +119,7 @@ body.hub .solo-movil{display:none}
 </main>
 
 <script>
-const EN_T={"PulsePC · Personalizar": "PulsePC · Customize", "Móvil": "Phone", "Cargando…": "Loading…", "Páginas": "Pages", "+ Página": "+ Page", "En el Nest Hub": "On the Nest Hub", "Página que se ve": "Page shown", "Segundos por página": "Seconds per page", "El Nest Hub no deja tocar la pantalla, así que aquí eliges qué página se queda fija o cada cuánto se pasan.": "The Nest Hub doesn't allow touching the page, so here you choose which page stays fixed or how often pages change.", "Copiar el diseño del móvil": "Copy the phone layout", "Añadir widget": "Add widget", "Si una temperatura pasa del límite de alerta, su tarjeta parpadea en rojo en el móvil. Los botones del widget Multimedia controlan la música del PC.": "If a temperature goes over the alert limit, its card blinks red on the phone. The buttons of the Media widget control the PC's music.", "Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Los cambios se guardan solos y el móvil los aplica en un segundo. En el móvil, toca la pantalla para pasar de página.": "Drag widgets to reorder them and click one to change its size. Changes are saved automatically and the phone applies them within a second. On the phone, tap the screen to change page.", "Este es el diseño del Nest Hub, independiente del del móvil. Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Se guarda solo y, si estás enviando PulsePC al Nest Hub, lo aplica en un segundo. Para enviarlo, usa ": "This is the Nest Hub layout, separate from the phone's. Drag widgets to reorder them and click one to change its size. It saves automatically and, if you are sending PulsePC to the Nest Hub, it applies within a second. To send it, use ", "Enviar al Nest Hub": "Send to Nest Hub", " en el icono de PulsePC.": " in the PulsePC tray icon.", "Haz clic en un widget de la vista previa para editarlo.": "Click a widget in the preview to edit it.", "Colores": "Colors", "Mostrar cabecera": "Show header", "Alerta de temperatura (°C)": "Temperature alert (°C)", "Restaurar diseño original": "Restore original layout", "Memoria": "Memory", "Temperaturas": "Temperatures", "Red": "Network", "Discos": "Disks", "Núcleos": "Cores", "GPU detalle": "GPU detail", "Ventiladores": "Fans", "Reloj": "Clock", "Procesos": "Processes", "Batería": "Battery", "Multimedia": "Media", "Gráfica": "Chart", "Imagen / GIF": "Image / GIF", "Temperatura CPU": "CPU temperature", "Temperatura GPU": "GPU temperature", "Red (bajada)": "Network (download)", "Fondo": "Background", "Tarjetas": "Cards", "Acento": "Accent", "Secundario": "Secondary", "Texto": "Text", "Conectado al agente": "Connected to the agent", "Guardando…": "Saving…", "Guardado · el Nest Hub ya lo muestra": "Saved · the Nest Hub is showing it", "Guardado · el móvil ya lo muestra": "Saved · the phone is showing it", "No se pudo guardar: ": "Could not save: ", "Página actual": "Current page", "Nombre": "Name", "Columnas": "Columns", "Filas": "Rows", "Mover antes": "Move earlier", "Mover después": "Move later", "Borrar página": "Delete page", "Tiene que quedar al menos una página": "At least one page must remain", "Widget": "Widget", "Título": "Title", "Ancho (columnas)": "Width (columns)", "Alto (filas)": "Height (rows)", "Qué muestra": "Shows", "Tipo": "Type", "◀ Antes": "◀ Earlier", "Después ▶": "Later ▶", "Quitar": "Remove", "Aplicar tema": "Apply theme", "Foto o GIF": "Photo or GIF", "Cambiar…": "Change…", "Elegir…": "Choose…", "Ajuste": "Fit", "Llenar la tarjeta (recorta)": "Fill the card (crops)", "Entera (sin recortar)": "Whole (no crop)", "PNG, JPG, WEBP o GIF animado, hasta 15 MB. El título solo se ve si escribes uno.": "PNG, JPG, WEBP or animated GIF, up to 15 MB. The title only shows if you type one.", "La imagen ocupa más de 15 MB": "The image is larger than 15 MB", "Subiendo imagen…": "Uploading image…", "No se pudo subir: ": "Could not upload: ", "Pasar solas": "Change automatically", "Fija: ": "Fixed: ", "¿Copiar el diseño del móvil al Nest Hub? Se sustituye el diseño actual del Nest Hub.": "Copy the phone layout to the Nest Hub? The current Nest Hub layout will be replaced.", "¿Volver al diseño original? Perderás tus cambios.": "Go back to the original layout? You will lose your changes.", "Página ": "Page ", "Sin conexión con el agente": "No connection to the agent", "No encuentro el agente. ¿Está abierto?": "Can't find the agent. Is it running?", "Sin GPU": "No GPU", "Sin sensores": "No sensors", "máx ": "max ", " núcleos": " cores", " ventiladores": " fans", "Sin batería": "No battery", " · cargando": " · charging", "Elige una foto o un GIF": "Choose a photo or GIF", "Mi PC": "My PC", " widget(s) no caben en esta página. Añade filas o columnas, o hazlos más pequeños.": " widget(s) don't fit on this page. Add rows or columns, or make them smaller.", " widget(s) no caben en esta página.": " widget(s) don't fit on this page.", "Widget · ": "Widget · ", "Idioma": "Language", "Guardado": "Saved"};
+const EN_T={"PulsePC · Personalizar": "PulsePC · Customize", "Móvil": "Phone", "Cargando…": "Loading…", "Páginas": "Pages", "+ Página": "+ Page", "En el Nest Hub": "On the Nest Hub", "Página que se ve": "Page shown", "Segundos por página": "Seconds per page", "El Nest Hub no deja tocar la pantalla, así que aquí eliges qué página se queda fija o cada cuánto se pasan.": "The Nest Hub doesn't allow touching the page, so here you choose which page stays fixed or how often pages change.", "Copiar el diseño del móvil": "Copy the phone layout", "Añadir widget": "Add widget", "Si una temperatura pasa del límite de alerta, su tarjeta parpadea en rojo en el móvil. Los botones del widget Multimedia controlan la música del PC.": "If a temperature goes over the alert limit, its card blinks red on the phone. The buttons of the Media widget control the PC's music.", "Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Los cambios se guardan solos y el móvil los aplica en un segundo. En el móvil, toca la pantalla para pasar de página.": "Drag widgets to reorder them and click one to change its size. Changes are saved automatically and the phone applies them within a second. On the phone, tap the screen to change page.", "Este es el diseño del Nest Hub, independiente del del móvil. Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Se guarda solo y, si estás enviando PulsePC al Nest Hub, lo aplica en un segundo. Para enviarlo, usa ": "This is the Nest Hub layout, separate from the phone's. Drag widgets to reorder them and click one to change its size. It saves automatically and, if you are sending PulsePC to the Nest Hub, it applies within a second. To send it, use ", "Enviar al Nest Hub": "Send to Nest Hub", " en el icono de PulsePC.": " in the PulsePC tray icon.", "Haz clic en un widget de la vista previa para editarlo.": "Click a widget in the preview to edit it.", "Colores": "Colors", "Mostrar cabecera": "Show header", "Alerta de temperatura (°C)": "Temperature alert (°C)", "Restaurar diseño original": "Restore original layout", "Memoria": "Memory", "Temperaturas": "Temperatures", "Red": "Network", "Discos": "Disks", "Núcleos": "Cores", "GPU detalle": "GPU detail", "Ventiladores": "Fans", "Reloj": "Clock", "Procesos": "Processes", "Batería": "Battery", "Multimedia": "Media", "Gráfica": "Chart", "Imagen / GIF": "Image / GIF", "Temperatura CPU": "CPU temperature", "Temperatura GPU": "GPU temperature", "Red (bajada)": "Network (download)", "Fondo": "Background", "Tarjetas": "Cards", "Acento": "Accent", "Secundario": "Secondary", "Texto": "Text", "Conectado al agente": "Connected to the agent", "Guardando…": "Saving…", "Guardado · el Nest Hub ya lo muestra": "Saved · the Nest Hub is showing it", "Guardado · el móvil ya lo muestra": "Saved · the phone is showing it", "No se pudo guardar: ": "Could not save: ", "Página actual": "Current page", "Nombre": "Name", "Columnas": "Columns", "Filas": "Rows", "Mover antes": "Move earlier", "Mover después": "Move later", "Borrar página": "Delete page", "Tiene que quedar al menos una página": "At least one page must remain", "Widget": "Widget", "Título": "Title", "Ancho (columnas)": "Width (columns)", "Alto (filas)": "Height (rows)", "Qué muestra": "Shows", "Tipo": "Type", "◀ Antes": "◀ Earlier", "Después ▶": "Later ▶", "Quitar": "Remove", "Aplicar tema": "Apply theme", "Foto o GIF": "Photo or GIF", "Cambiar…": "Change…", "Elegir…": "Choose…", "Ajuste": "Fit", "Llenar la tarjeta (recorta)": "Fill the card (crops)", "Entera (sin recortar)": "Whole (no crop)", "PNG, JPG, WEBP o GIF animado, hasta 15 MB. El título solo se ve si escribes uno.": "PNG, JPG, WEBP or animated GIF, up to 15 MB. The title only shows if you type one.", "La imagen ocupa más de 15 MB": "The image is larger than 15 MB", "Subiendo imagen…": "Uploading image…", "No se pudo subir: ": "Could not upload: ", "Pasar solas": "Change automatically", "Fija: ": "Fixed: ", "¿Copiar el diseño del móvil al Nest Hub? Se sustituye el diseño actual del Nest Hub.": "Copy the phone layout to the Nest Hub? The current Nest Hub layout will be replaced.", "¿Volver al diseño original? Perderás tus cambios.": "Go back to the original layout? You will lose your changes.", "Página ": "Page ", "Sin conexión con el agente": "No connection to the agent", "No encuentro el agente. ¿Está abierto?": "Can't find the agent. Is it running?", "Sin GPU": "No GPU", "Sin sensores": "No sensors", "máx ": "max ", " núcleos": " cores", " ventiladores": " fans", "Sin batería": "No battery", " · cargando": " · charging", "Elige una foto o un GIF": "Choose a photo or GIF", "Mi PC": "My PC", " widget(s) no caben en esta página. Añade filas o columnas, o hazlos más pequeños.": " widget(s) don't fit on this page. Add rows or columns, or make them smaller.", " widget(s) no caben en esta página.": " widget(s) don't fit on this page.", "Widget · ": "Widget · ", "Idioma": "Language", "Guardado": "Saved", "Tarjetas · 2º color del degradado": "Cards · 2nd gradient color", "Números": "Numbers", "Tipografía": "Font", "Degradado en tarjetas": "Card gradient", "Condensada": "Condensed", "Moderna": "Modern", "Fina": "Light", "Gruesa": "Bold", "Con serifa": "Serif", "Monoespaciada": "Monospace", "Manuscrita": "Handwritten", "Informal": "Casual", "Sin degradado": "No gradient", "Vertical": "Vertical", "Horizontal": "Horizontal", "Diagonal": "Diagonal"};
 let LANG="es";
 function L(t){return LANG==="en"&&EN_T[t]!=null?EN_T[t]:t}
 // Textos fijos del HTML: se guardan en espanol y se traducen al cambiar de idioma.
@@ -138,12 +141,21 @@ const NOMBRES = {cpu:"CPU",ram:L("Memoria"),gpu:"GPU",temps:L("Temperaturas"),re
   nucleos:L("Núcleos"),gpu_detalle:L("GPU detalle"),ventiladores:L("Ventiladores"),reloj:L("Reloj"),
   procesos:L("Procesos"),bateria:L("Batería"),multimedia:L("Multimedia"),grafica:L("Gráfica"),imagen:L("Imagen / GIF")};
 const METRICAS = {cpu:"CPU",gpu:"GPU",ram:L("Memoria"),temp_cpu:L("Temperatura CPU"),temp_gpu:L("Temperatura GPU"),red:L("Red (bajada)")};
-const ETQ_COLOR = {fondo:L("Fondo"),tarjeta:L("Tarjetas"),acento:L("Acento"),secundario:L("Secundario"),texto:L("Texto")};
+const ETQ_COLOR = {fondo:"Fondo",tarjeta:"Tarjetas",tarjeta2:"Tarjetas · 2º color del degradado",acento:"Acento",secundario:"Secundario",texto:"Texto",numeros:"Números"};
+// Mismas tipografias que el movil (Android 6): [nombre, familia, peso texto, peso numeros]
+const FUENTES = {condensada:["Condensada",'"Roboto Condensed",Roboto,sans-serif',400,500],moderna:["Moderna","Roboto,sans-serif",400,500],
+  fina:["Fina","Roboto,sans-serif",300,300],gruesa:["Gruesa","Roboto,sans-serif",500,900],serif:["Con serifa",'"Noto Serif",Georgia,serif',400,600],
+  mono:["Monoespaciada",'"Roboto Mono",Consolas,monospace',400,500],manuscrita:["Manuscrita",'"Dancing Script",cursive',500,700],informal:["Informal",'"Coming Soon",cursive',400,400]};
+const DEGRADADOS = {no:"Sin degradado",vertical:"Vertical",horizontal:"Horizontal",diagonal:"Diagonal"};
+function fondoTarjeta(){const T=D.tema,dir={vertical:"180deg",horizontal:"90deg",diagonal:"135deg"}[D.degradado];
+  return dir?`linear-gradient(${dir},${T.tarjeta},${T.tarjeta2||T.tarjeta})`:T.tarjeta}
+function fuentePantalla(){const f=FUENTES[D.fuente]||FUENTES.condensada,pan=$("pantalla");
+  pan.style.fontFamily=f[1];pan.style.fontWeight=f[2];pan.style.setProperty("--peso-num",f[3]);pan.style.setProperty("--c-num",D.tema.numeros||D.tema.texto)}
 const TEMAS = [
-  {fondo:"#0E1116",tarjeta:"#171B22",acento:"#3EC7A0",secundario:"#5B9BF0",texto:"#E6E6E6"},
-  {fondo:"#000000",tarjeta:"#111111",acento:"#FF4D4D",secundario:"#FFB020",texto:"#F2F2F2"},
-  {fondo:"#0B0820",tarjeta:"#17123A",acento:"#B07CFF",secundario:"#3DD6F5",texto:"#ECE8FF"},
-  {fondo:"#0A140E",tarjeta:"#13231A",acento:"#8BE04E",secundario:"#E0C24E",texto:"#E4F2E8"},
+  {fondo:"#0E1116",tarjeta:"#171B22",tarjeta2:"#232A35",acento:"#3EC7A0",secundario:"#5B9BF0",texto:"#E6E6E6",numeros:"#E6E6E6"},
+  {fondo:"#000000",tarjeta:"#111111",tarjeta2:"#2A1414",acento:"#FF4D4D",secundario:"#FFB020",texto:"#F2F2F2",numeros:"#FFFFFF"},
+  {fondo:"#0B0820",tarjeta:"#17123A",tarjeta2:"#2E1A5C",acento:"#B07CFF",secundario:"#3DD6F5",texto:"#ECE8FF",numeros:"#FFFFFF"},
+  {fondo:"#0A140E",tarjeta:"#13231A",tarjeta2:"#1F3A2A",acento:"#8BE04E",secundario:"#E0C24E",texto:"#E4F2E8",numeros:"#F4FFE8"},
 ];
 let DEST=location.hash==="#pantalla"?"pantalla":"movil";
 let arrastre=false, D=null, defecto=null, tipos=[], pag=0, selW=-1, stats={}, temporizador=null;
@@ -241,14 +253,14 @@ function pintar(){
     b.onclick=()=>{p.widgets.push({tipo:t,ancho:1,alto:1,titulo:""});selW=p.widgets.length-1;cambio();
       if(t==="imagen"&&$("wImgF"))$("wImgF").click()};$("paleta").appendChild(b)});
   // pantalla
-  const pan=$("pantalla");pan.style.background=T.fondo;pan.style.color=T.texto;pan.innerHTML="";
+  const pan=$("pantalla");pan.style.background=T.fondo;pan.style.color=T.texto;pan.innerHTML="";fuentePantalla();
   if(D.cabecera){const c=document.createElement("div");c.className="cab";c.innerHTML=`<i></i><b>${esc(stats.equipo||L("Mi PC"))}</b><span style="margin-left:auto;opacity:.6">USB · ${esc(stats.so||"Windows")}</span>`;pan.appendChild(c)}
   const rj=document.createElement("div");rj.className="rejilla";
   rj.style.gridTemplateColumns=`repeat(${p.columnas},1fr)`;rj.style.gridTemplateRows=`repeat(${p.filas},1fr)`;
   const pos=colocar(p);let fuera=0;
   pos.forEach(o=>{
     const w=p.widgets[o.i];if(o.f<0){fuera++;return}
-    const el=document.createElement("div");el.className="w"+(o.i===selW?" sel":"");el.style.background=T.tarjeta;
+    const el=document.createElement("div");el.className="w"+(o.i===selW?" sel":"");el.style.background=fondoTarjeta();
     el.style.gridColumn=`${o.c+1} / span ${o.an}`;el.style.gridRow=`${o.f+1} / span ${o.al}`;
     const[v,pc]=valor(w.tipo,w);
     el.innerHTML=`<div class="t">${esc(w.titulo||L(NOMBRES[w.tipo]))}</div><div class="v">${esc(v)}</div>`+(pc!=null?`<div class="b"><i style="width:${Math.min(100,pc)}%"></i></div>`:"");
@@ -307,6 +319,11 @@ function pintar(){
   $("colores").innerHTML=Object.keys(ETQ_COLOR).map(k=>`<label>${L(ETQ_COLOR[k])} <input type="color" data-k="${k}" value="${T[k]}"></label>`).join("");
   $("colores").querySelectorAll("input").forEach(i=>i.oninput=e=>{D.tema[e.target.dataset.k]=e.target.value.toUpperCase();pintarPantallaRapido();guardar()});
   $("cabecera").checked=!!D.cabecera;
+  $("fuente").innerHTML=Object.keys(FUENTES).map(k=>`<option value="${k}" style="font-family:${FUENTES[k][1].replace(/"/g,"'")}">${L(FUENTES[k][0])}</option>`).join("");
+  $("fuente").value=D.fuente||"condensada";
+  $("degradado").innerHTML=Object.keys(DEGRADADOS).map(k=>`<option value="${k}">${L(DEGRADADOS[k])}</option>`).join("");
+  $("degradado").value=D.degradado||"no";
+  $("colores").querySelector('[data-k="tarjeta2"]').closest("label").style.display=(D.degradado&&D.degradado!=="no")?"flex":"none";
   if(DEST==="pantalla"){
     const fj=D.pagina_fija==null?-1:D.pagina_fija;
     $("hFija").innerHTML=`<option value="-1">${L("Pasar solas")}</option>`+D.paginas.map((pg,i)=>`<option value="${i}"${i===fj?" selected":""}>${L("Fija: ")}${esc(pg.nombre)}</option>`).join("");
@@ -318,7 +335,7 @@ function pintar(){
 }
 function pintarListaSolo(){const els=$("paginas").querySelectorAll(".pag span");els[pag]&&(els[pag].textContent=D.paginas[pag].nombre)}
 function pintarPantallaRapido(){const T=D.tema;document.documentElement.style.setProperty("--c-acento",T.acento);
-  const pan=$("pantalla");pan.style.background=T.fondo;pan.style.color=T.texto;pan.querySelectorAll(".w").forEach(w=>w.style.background=T.tarjeta)}
+  const pan=$("pantalla");pan.style.background=T.fondo;pan.style.color=T.texto;pan.querySelectorAll(".w").forEach(w=>w.style.background=fondoTarjeta());fuentePantalla()}
 function moverPag(d){const j=pag+d;if(j<0||j>=D.paginas.length)return;
   if(D.pagina_fija===pag)D.pagina_fija=j;else if(D.pagina_fija===j)D.pagina_fija=pag;const[m]=D.paginas.splice(pag,1);D.paginas.splice(j,0,m);pag=j;cambio()}
 function moverW(d){const p=D.paginas[pag],j=selW+d;if(j<0||j>=p.widgets.length)return;const[m]=p.widgets.splice(selW,1);p.widgets.splice(j,0,m);selW=j;cambio()}
@@ -333,6 +350,8 @@ $("hCopiar").onclick=async()=>{if(!confirm(L("¿Copiar el diseño del móvil al 
   D=JSON.parse(JSON.stringify(j.diseno));D.pagina_fija=-1;D.segundos=sg||15;pag=0;selW=-1;cambio()};
 function irA(d){if(d===DEST)return;DEST=d;history.replaceState(null,"",d==="pantalla"?"#pantalla":"#");cargar()}
 $("dMovil").onclick=()=>irA("movil");$("dHub").onclick=()=>irA("pantalla");
+$("fuente").onchange=e=>{D.fuente=e.target.value;cambio()};
+$("degradado").onchange=e=>{D.degradado=e.target.value;cambio()};
 $("cabecera").onchange=e=>{D.cabecera=e.target.checked;cambio()};
 $("alerta").onchange=e=>{D.alerta_temp=lim(e.target.value,50,110);cambio()};
 $("restaurar").onclick=()=>{if(confirm(L("¿Volver al diseño original? Perderás tus cambios."))){D=JSON.parse(JSON.stringify(defecto));pag=0;selW=-1;cambio()}};

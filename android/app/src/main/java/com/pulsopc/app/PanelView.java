@@ -24,6 +24,10 @@ public class PanelView extends View {
     private int FONDO = 0xFF0E1116, TARJETA = 0xFF171B22, PISTA = 0x22E6E6E6;
     private int TEXTO = 0xFFE6E6E6, TENUE = 0x99E6E6E6;
     private int ACENTO = 0xFF3EC7A0, SECUNDARIO = 0xFF5B9BF0;
+    /** Color de los numeros/valores y segundo color del degradado de las tarjetas. */
+    private int NUMEROS = 0xFFE6E6E6, TARJETA2 = 0xFF232A35;
+    /** Degradado de las tarjetas: "no", "vertical", "horizontal" o "diagonal". */
+    private String degradado = "no";
     static final int AVISO = 0xFFF2B33D, ALERTA = 0xFFF0645B;
 
     /** Pagina por defecto si el agente es antiguo y no manda diseno. */
@@ -138,14 +142,32 @@ public class PanelView extends View {
             ACENTO = color(t, "acento", ACENTO);
             SECUNDARIO = color(t, "secundario", SECUNDARIO);
             TEXTO = color(t, "texto", TEXTO);
+            NUMEROS = color(t, "numeros", TEXTO);
+            TARJETA2 = color(t, "tarjeta2", TARJETA2);
             TENUE = (TEXTO & 0x00FFFFFF) | 0x99000000;
             PISTA = (TEXTO & 0x00FFFFFF) | 0x22000000;
         }
         cabecera = d.optBoolean("cabecera", true);
+        degradado = d.optString("degradado", "no");
+        pTexto.setTypeface(tipografia(d.optString("fuente", "condensada")));
         alertaTemp = d.optInt("alerta_temp", 90);
         JSONArray p = d.optJSONArray("paginas");
         if (p != null && p.length() > 0) paginas = p;
         if (paginas != null && pagina >= paginas.length()) pagina = 0;
+    }
+
+    /** Tipografias del sistema que tiene Android 6 (sin meter archivos de fuentes). */
+    private static Typeface tipografia(String f) {
+        switch (f) {
+            case "moderna": return Typeface.create("sans-serif", Typeface.NORMAL);
+            case "fina": return Typeface.create("sans-serif-light", Typeface.NORMAL);
+            case "gruesa": return Typeface.create("sans-serif-black", Typeface.NORMAL);
+            case "serif": return Typeface.create("serif", Typeface.NORMAL);
+            case "mono": return Typeface.create("monospace", Typeface.NORMAL);
+            case "manuscrita": return Typeface.create("cursive", Typeface.NORMAL);
+            case "informal": return Typeface.create("casual", Typeface.NORMAL);
+            default: return Typeface.create("sans-serif-condensed", Typeface.NORMAL);
+        }
     }
 
     /** Sin datos durante mas de 30 s: el PC esta apagado o el agente cerrado. */
@@ -293,7 +315,16 @@ public class PanelView extends View {
             float tw = cw * an + m * (an - 1), th = ch * al + m * (al - 1);
             r.set(x, y, x + tw, y + th);
             pRelleno.setColor(TARJETA);
+            android.graphics.LinearGradient deg = null;
+            if (!"no".equals(degradado)) {
+                float x2 = "vertical".equals(degradado) ? x : x + tw;
+                float y2 = "horizontal".equals(degradado) ? y : y + th;
+                deg = new android.graphics.LinearGradient(x, y, x2, y2, TARJETA, TARJETA2,
+                        android.graphics.Shader.TileMode.CLAMP);
+                pRelleno.setShader(deg);
+            }
             c.drawRoundRect(r, 10 * dp, 10 * dp, pRelleno);
+            pRelleno.setShader(null);
             float pd = 10 * dp;
             tituloActual = wd.optString("titulo", "");
             widgetActual = wd;
@@ -434,7 +465,7 @@ public class PanelView extends View {
             pTexto.setTextSize(12 * dp);
             float anchoV = pTexto.measureText(valor);
             pTexto.setTextAlign(Paint.Align.RIGHT);
-            pTexto.setColor(TEXTO);
+            pTexto.setColor(NUMEROS);
             c.drawText(valor, x + w, yy + 12 * dp, pTexto);
             pTexto.setTextAlign(Paint.Align.LEFT);
             pTexto.setColor(TEXTO);
@@ -469,7 +500,7 @@ public class PanelView extends View {
         r.set(bx + in, by + in, bx + in + (bw - 2 * in) * pct / 100f, by + bh - in);
         c.drawRoundRect(r, 3 * dp, 3 * dp, pRelleno);
         pTexto.setTextAlign(Paint.Align.CENTER);
-        pTexto.setColor(TEXTO);
+        pTexto.setColor(NUMEROS);
         pTexto.setTextSize(bh * 0.45f);
         c.drawText(pct + "%", bx + bw / 2, by + bh / 2 + bh * 0.16f, pTexto);
         String estado;
@@ -621,7 +652,7 @@ public class PanelView extends View {
         boolean juntos = pTexto.measureText(tit) + anchoV + 10 * dp <= w;
         titulo(c, nombre, x, y, juntos ? w - anchoV - 10 * dp : w);
         pTexto.setTextAlign(Paint.Align.RIGHT);
-        pTexto.setColor(TEXTO);
+        pTexto.setColor(NUMEROS);
         pTexto.setTextSize(tamV);
         float baseV = juntos ? y + tamV : y + 16 * dp + tamV;
         c.drawText(encajar(valor, w), x + w, baseV, pTexto);
@@ -674,7 +705,7 @@ public class PanelView extends View {
         String hora = new java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora);
         String fecha = new java.text.SimpleDateFormat(T.en ? "EEEE, MMMM d" : "EEEE d MMMM", T.locale()).format(ahora);
         pTexto.setTextAlign(Paint.Align.CENTER);
-        pTexto.setColor(TEXTO);
+        pTexto.setColor(NUMEROS);
         float tam = Math.min(h * 0.5f, w / 2.6f);
         pTexto.setTextSize(tam);
         hora = encajar(hora, w);
@@ -745,7 +776,7 @@ public class PanelView extends View {
         pTrazo.setColor(colorPorNivel(pct, 70, 90));
         c.drawArc(r, 135, 270 * Math.max(0, Math.min(100, pct)) / 100f, false, pTrazo);
         pTexto.setTextAlign(Paint.Align.CENTER);
-        pTexto.setColor(TEXTO);
+        pTexto.setColor(NUMEROS);
         pTexto.setTextSize(radio * 0.5f);
         c.drawText(encajar(centro, radio * 1.6f), cx, cy + radio * 0.17f, pTexto);
         if (sub != null) {
@@ -901,7 +932,7 @@ public class PanelView extends View {
         titulo(c, T.t("Discos", "Disks"), x, y, w);
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setTextSize(12 * dp);
-        pTexto.setColor(TEXTO);
+        pTexto.setColor(NUMEROS);
         c.drawText(encajar("L " + velocidad(d.optDouble("lectura_kbs", 0)) + "   E " + velocidad(d.optDouble("escritura_kbs", 0)), w),
                 x, y + 34 * dp, pTexto);
         JSONArray u = d.optJSONArray("unidades");
@@ -952,7 +983,7 @@ public class PanelView extends View {
             pTexto.setColor(TENUE);
             c.drawText(String.valueOf(i), cx, cy + fila / 2 + 4 * dp, pTexto);
             pTexto.setTextAlign(Paint.Align.RIGHT);
-            pTexto.setColor(TEXTO);
+            pTexto.setColor(NUMEROS);
             c.drawText(Math.round(v) + "%", cx + colW, cy + fila / 2 + 4 * dp, pTexto);
             barra(c, cx + 20 * dp, cy + fila / 2 - alto / 2, colW - 58 * dp, alto, v, colorPorNivel(v, 70, 90));
         }
@@ -961,7 +992,7 @@ public class PanelView extends View {
     private void filaDato(Canvas c, String nombre, String valor, float x, float y, float w) {
         pTexto.setTextSize(13 * dp);
         pTexto.setTextAlign(Paint.Align.RIGHT);
-        pTexto.setColor(TEXTO);
+        pTexto.setColor(NUMEROS);
         valor = encajar(valor, w * 0.6f);
         float anchoV = pTexto.measureText(valor);
         c.drawText(valor, x + w, y, pTexto);

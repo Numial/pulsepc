@@ -5,34 +5,36 @@
 <!-- Pantalla para enviar a un Nest Hub (u otra pantalla Chromecast) o abrir en cualquier navegador.
      Dibuja el mismo diseno que el movil (paginas, widgets, tema). Las paginas se pasan solas,
      porque las paginas enviadas al Nest Hub no responden al tacto. -->
+<!-- Tipografias equivalentes a las del sistema de Android (si no hay Internet, se usa la del navegador) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;900&family=Roboto+Condensed:wght@400;500&family=Roboto+Mono:wght@400;500&family=Noto+Serif:wght@400;600&family=Dancing+Script:wght@500;700&family=Coming+Soon&display=swap">
 <style>
-:root{--fondo:#0E1116;--tarjeta:#171B22;--acento:#3EC7A0;--sec:#5B9BF0;--texto:#E6E6E6}
+:root{--fondo:#0E1116;--tarjeta:#171B22;--tarjeta-bg:#171B22;--acento:#3EC7A0;--sec:#5B9BF0;--texto:#E6E6E6;--num:#E6E6E6;--fuente:"Roboto Condensed",Roboto,sans-serif;--peso:400;--pesoG:500}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;background:var(--fondo);color:var(--texto);
-  font-family:"Google Sans",Roboto,"Segoe UI",sans-serif}
+  font-family:var(--fuente);font-weight:var(--peso)}
 #raiz{position:absolute;inset:0;display:flex;flex-direction:column;padding:2vh 2vw;gap:1.6vh;transition:transform 2s}
 #cab{display:flex;justify-content:space-between;align-items:baseline;font-size:3.2vh;opacity:.75}
 #cab b{font-weight:500}
 #rejilla{flex:1;display:grid;gap:1.6vh;min-height:0}
-.w{background:var(--tarjeta);border-radius:2vh;padding:1.8vh 1.6vw;display:flex;flex-direction:column;
+.w{background:var(--tarjeta-bg);border-radius:2vh;padding:1.8vh 1.6vw;display:flex;flex-direction:column;
   min-width:0;min-height:0;overflow:hidden;border:.4vh solid transparent}
 .w.alerta{animation:parpadeo 1s infinite}
 @keyframes parpadeo{50%{border-color:#E5484D;background:#3a1517}}
 .c{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0}
 .t{font-size:2.6vh;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:.6vh}
-.g{font-size:7vh;font-weight:500;line-height:1.05;white-space:nowrap}
+.g{color:var(--num);font-size:7vh;font-weight:var(--pesoG);line-height:1.05;white-space:nowrap}
 .g small{font-size:.45em;opacity:.7;font-weight:400}
 .s{font-size:2.6vh;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .b{height:1.2vh;background:rgba(255,255,255,.08);border-radius:1vh;overflow:hidden;margin:.8vh 0}
 .b i{display:block;height:100%;background:var(--acento);border-radius:1vh;transition:width .8s}
 .l{display:flex;justify-content:space-between;gap:1vw;font-size:2.6vh;line-height:1.5}
 .l span:first-child{opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.l span:last-child{white-space:nowrap}
+.l span:last-child{white-space:nowrap;color:var(--num)}
 .cores{flex:1;display:flex;align-items:flex-end;gap:.3vw;min-height:0}
 .cores i{flex:1;background:var(--acento);border-radius:.5vh .5vh 0 0;min-height:2px;transition:height .8s}
 .med{display:flex;gap:1.5vw;align-items:center;flex:1;min-height:0}
 .med img{height:100%;max-height:22vh;aspect-ratio:1;object-fit:cover;border-radius:1.2vh}
-.med .g{font-size:4vh;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.med .g{color:var(--texto);font-size:4vh;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 canvas{flex:1;width:100%;min-height:0}
 .w.img{padding:0;position:relative}
 .w.img .c{position:absolute;inset:0}
@@ -140,7 +142,15 @@ function pintar(){
   var pt="";for(var k=0;k<ps.length&&ps.length>1&&!(fija>=0);k++)pt+=k==pag?"●":"○";document.getElementById("puntos").textContent=pt;
 }
 function aplicarTema(){if(!D||D.version===versionD)return;versionD=D.version;var t=D.tema||{},s=document.documentElement.style;
-  s.setProperty("--fondo",t.fondo);s.setProperty("--tarjeta",t.tarjeta);s.setProperty("--acento",t.acento);s.setProperty("--sec",t.secundario);s.setProperty("--texto",t.texto)}
+  s.setProperty("--fondo",t.fondo);s.setProperty("--tarjeta",t.tarjeta);s.setProperty("--acento",t.acento);s.setProperty("--sec",t.secundario);s.setProperty("--texto",t.texto);
+  s.setProperty("--num",t.numeros||t.texto);
+  var f=FUENTES[D.fuente]||FUENTES.condensada;s.setProperty("--fuente",f[0]);s.setProperty("--peso",f[1]);s.setProperty("--pesoG",f[2]);
+  var dir={vertical:"180deg",horizontal:"90deg",diagonal:"135deg"}[D.degradado];
+  s.setProperty("--tarjeta-bg",dir?"linear-gradient("+dir+","+t.tarjeta+","+(t.tarjeta2||t.tarjeta)+")":t.tarjeta)}
+// Mismas tipografias que el movil: [familia, peso del texto, peso de los numeros]
+var FUENTES={condensada:['"Roboto Condensed",Roboto,sans-serif',400,500],moderna:['Roboto,sans-serif',400,500],
+  fina:['Roboto,sans-serif',300,300],gruesa:['Roboto,sans-serif',500,900],serif:['"Noto Serif",Georgia,serif',400,600],
+  mono:['"Roboto Mono",Consolas,monospace',400,500],manuscrita:['"Dancing Script",cursive',500,700],informal:['"Coming Soon",cursive',400,400]};
 var PV=null;
 function pedir(){var r=new XMLHttpRequest();r.open("GET","/stats?pantalla=1");r.timeout=4000;
   r.onload=function(){try{var s=JSON.parse(r.responseText);

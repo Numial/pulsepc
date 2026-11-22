@@ -745,7 +745,7 @@ METRICAS_GRAFICA = ["cpu", "gpu", "ram", "temp_cpu", "temp_gpu", "red"]
 DISENO_POR_DEFECTO = {
     "version": 1,
     "tema": {"fondo": "#0E1116", "tarjeta": "#171B22", "acento": "#3EC7A0",
-             "secundario": "#5B9BF0", "texto": "#E6E6E6"},
+             "secundario": "#5B9BF0", "texto": "#E6E6E6", "numeros": "#E6E6E6", "tarjeta2": "#232A35"},
     "cabecera": True,
     "alerta_temp": 90,
     "paginas": [
@@ -813,6 +813,10 @@ def _color(v, defecto):
     return defecto
 
 
+FUENTES = ["condensada", "moderna", "fina", "gruesa", "serif", "mono", "manuscrita", "informal"]
+DEGRADADOS = ["no", "vertical", "horizontal", "diagonal"]
+
+
 def validar_diseno(d, destino="movil"):
     """Devuelve un diseno limpio; lanza ValueError si no sirve."""
     if not isinstance(d, dict):
@@ -820,6 +824,8 @@ def validar_diseno(d, destino="movil"):
     base = DISENO_POR_DEFECTO
     tema_in = d.get("tema") or {}
     tema = {k: _color(tema_in.get(k), v) for k, v in base["tema"].items()}
+    if not tema_in.get("numeros"):
+        tema["numeros"] = tema["texto"]   # disenos antiguos: numeros del mismo color que el texto
     paginas = []
     for p in (d.get("paginas") or [])[:8]:
         cols = max(1, min(4, int(p.get("columnas", 3))))
@@ -851,7 +857,9 @@ def validar_diseno(d, destino="movil"):
     except (TypeError, ValueError):
         alerta = 90
     limpio = {"version": int(time.time()), "tema": tema, "cabecera": bool(d.get("cabecera", True)),
-              "alerta_temp": alerta, "paginas": paginas}
+              "alerta_temp": alerta, "paginas": paginas,
+              "fuente": d.get("fuente") if d.get("fuente") in FUENTES else "condensada",
+              "degradado": d.get("degradado") if d.get("degradado") in DEGRADADOS else "no"}
     if destino == "pantalla":
         try:
             fija = int(d.get("pagina_fija", -1))
