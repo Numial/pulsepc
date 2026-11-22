@@ -363,6 +363,9 @@ def main():
             pystray.MenuItem("English", poner_idioma("en"), checked=lambda it: agente.idioma() == "en", radio=True),
         )),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem(L("Actualizar la app del móvil al conectarlo", "Update the phone app when connected"),
+                         lambda i, it: (agente.poner_actualizar_app(not agente.actualizar_app_activado()), i.update_menu()),
+                         checked=lambda it: agente.actualizar_app_activado()),
         pystray.MenuItem(L("Arrancar con Windows", "Start with Windows"), alternar_arranque,
                          checked=lambda it: arranque_activado(), visible=es_windows),
         pystray.MenuItem(L("Abrir registro", "Open log"), lambda i, it: os.startfile(os.path.join(DIR, "pulsopc.log"))

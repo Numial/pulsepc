@@ -83,6 +83,16 @@ PulsePC está en **español e inglés**. Se cambia desde el editor (selector arr
 
 PulsePC is available in **Spanish and English**. Switch it from the editor (selector at the top) or from the tray icon (*Idioma / Language*); the tray, the editor, the Nest Hub and the phone app all follow it.
 
+### La app del móvil se actualiza sola
+
+Cada vez que cambia la app, GitHub la compila y la publica en la release [`apk`](https://github.com/Numial/pulsepc/releases/tag/apk).
+Al conectar el móvil por USB (y cada 30 min mientras siga conectado), PulsePC mira si hay una versión más nueva,
+la descarga, la instala con `adb` y abre la app. Se puede desactivar en el icono: *Actualizar la app del móvil al conectarlo*.
+
+La app se firma siempre con `android/debug.keystore` (clave de depuración, no secreta) para que se pueda actualizar
+encima de cualquier versión anterior. La primera vez, si el móvil tenía una versión firmada en otro PC, PulsePC la
+desinstala y la vuelve a instalar (solo se pierde la IP escrita a mano).
+
 ## 2. App Android
 
 - Java puro, sin librerías externas, `minSdk 23` (Android 6.0).

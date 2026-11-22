@@ -670,6 +670,57 @@ def buscar_adb():
 
 
 APP_ACTIVIDAD = "com.pulsopc.app/.MainActivity"
+APP_PAQUETE = "com.pulsopc.app"
+
+# La app la compila GitHub en cada cambio (ver .github/workflows/apk.yml) y la deja aqui:
+URL_APK = "https://github.com/Numial/pulsepc/releases/download/apk/"
+DIR_APK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apk")
+CADA_CUANTO_ACTUALIZAR = 30 * 60   # con el movil conectado, se vuelve a mirar cada 30 min
+
+
+def actualizar_app_activado():
+    idioma()   # carga los ajustes
+    return _ajustes.get("actualizar_app", True)
+
+
+def poner_actualizar_app(activar):
+    _ajustes["actualizar_app"] = bool(activar)
+    poner_idioma(idioma())   # guarda los ajustes
+
+
+def version_disponible():
+    """Ultima version de la app publicada en GitHub: {"versionCode", "versionName"} o None."""
+    try:
+        req = urllib.request.Request(URL_APK + "version.json", headers={"User-Agent": "PulsePC"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            v = json.loads(r.read().decode("utf-8"))
+        return v if int(v.get("versionCode", 0)) > 0 else None
+    except Exception:
+        return None
+
+
+def descargar_apk(v):
+    """Descarga la APK de esa version (si no estaba ya descargada) y devuelve su ruta."""
+    os.makedirs(DIR_APK, exist_ok=True)
+    ruta = os.path.join(DIR_APK, "PulsePC-%d.apk" % int(v["versionCode"]))
+    if os.path.isfile(ruta) and os.path.getsize(ruta) > 50000:
+        return ruta
+    req = urllib.request.Request(URL_APK + "PulsePC.apk", headers={"User-Agent": "PulsePC"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        datos = r.read()
+    if datos[:2] != b"PK" or len(datos) < 50000:
+        raise RuntimeError("la descarga no es una APK valida")
+    with open(ruta + ".tmp", "wb") as f:
+        f.write(datos)
+    os.replace(ruta + ".tmp", ruta)
+    # Se guarda solo la ultima: las anteriores se borran.
+    for n in os.listdir(DIR_APK):
+        if n.endswith(".apk") and n != os.path.basename(ruta):
+            try:
+                os.remove(os.path.join(DIR_APK, n))
+            except OSError:
+                pass
+    return ruta
 
 
 def bucle_usb(puerto_http, mantener_app=True):
@@ -704,6 +755,58 @@ def bucle_usb(puerto_http, mantener_app=True):
                 return "com.pulsopc.app" in linea
         return True  # si no se puede saber, no molestar
 
+    def version_instalada(sn):
+        out = sh(sn, "shell", "dumpsys", "package", APP_PAQUETE)
+        for trozo in out.split():
+            if trozo.startswith("versionCode="):
+                try:
+                    return int(trozo.split("=", 1)[1])
+                except ValueError:
+                    pass
+        return 0   # no instalada
+
+    def instalar(sn, ruta):
+        r = subprocess.run([adb, "-s", sn, "install", "-r", ruta], capture_output=True, text=True,
+                           errors="replace", timeout=300, creationflags=flags)
+        salida = (r.stdout or "") + (r.stderr or "")
+        if "Success" in salida:
+            return True, ""
+        if "UPDATE_INCOMPATIBLE" in salida or "signatures do not match" in salida.lower():
+            # La version instalada se compilo con otra firma (en otro PC): hay que quitarla
+            # una vez. Se pierde solo la IP guardada a mano; el diseno vive en el PC.
+            sh(sn, "uninstall", APP_PAQUETE)
+            r = subprocess.run([adb, "-s", sn, "install", ruta], capture_output=True, text=True,
+                               errors="replace", timeout=300, creationflags=flags)
+            salida = (r.stdout or "") + (r.stderr or "")
+            if "Success" in salida:
+                return True, ""
+        return False, salida.strip().splitlines()[-1] if salida.strip() else "?"
+
+    revisado = {}
+
+    def actualizar_si_hace_falta(sn):
+        """Si GitHub tiene una version mas nueva de la app que la del movil, la instala."""
+        revisado[sn] = time.time()
+        if not actualizar_app_activado():
+            return False
+        v = version_disponible()
+        if not v:
+            return False
+        tiene = version_instalada(sn)
+        if tiene >= int(v["versionCode"]):
+            return False
+        nombre = v.get("versionName", str(v["versionCode"]))
+        avisar(tr("Actualizando la app del móvil a la versión %s...", "Updating the phone app to version %s...") % nombre)
+        try:
+            ok, error = instalar(sn, descargar_apk(v))
+        except Exception as e:
+            ok, error = False, str(e)
+        if ok:
+            avisar(tr("App del móvil actualizada a la versión %s.", "Phone app updated to version %s.") % nombre)
+        else:
+            avisar(tr("No pude actualizar la app del móvil: %s", "Could not update the phone app: %s") % error)
+        return ok
+
     conocidos = set()
     while True:
         try:
@@ -722,8 +825,18 @@ def bucle_usb(puerto_http, mantener_app=True):
                 if sn not in conocidos:
                     avisar(tr("Móvil conectado por USB. Abriendo PulsePC...", "Phone connected over USB. Opening PulsePC..."))
                     sh(sn, "shell", "svc", "power", "stayon", "usb")  # pantalla encendida con USB
-                    abrir_app(sn)
                     conocidos.add(sn)
+                    try:
+                        actualizar_si_hace_falta(sn)   # antes de abrirla, por si hay version nueva
+                    except Exception as e:
+                        print("Actualizar app:", e)
+                    abrir_app(sn)
+                elif time.time() - revisado.get(sn, 0) > CADA_CUANTO_ACTUALIZAR:
+                    try:
+                        if actualizar_si_hace_falta(sn):
+                            abrir_app(sn)
+                    except Exception as e:
+                        print("Actualizar app:", e)
                 elif mantener_app and not app_delante(sn):
                     abrir_app(sn)
             conocidos &= set(serials)

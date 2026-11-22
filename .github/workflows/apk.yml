@@ -1,0 +1,47 @@
+# Compila la app Android en cada cambio y la publica en la release "apk" de GitHub.
+# El agente del PC la descarga de ahi al conectar el movil por USB y la instala si es mas nueva.
+name: APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/apk.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Compilar
+        working-directory: android
+        run: |
+          CODIGO=$((100 + GITHUB_RUN_NUMBER))
+          chmod +x gradlew
+          ./gradlew assembleDebug -PcodigoVersion=$CODIGO --no-daemon
+          NOMBRE=$(grep -oP "versionName '\K[^']+" app/build.gradle).$CODIGO
+          mkdir -p ../salida
+          cp app/build/outputs/apk/debug/app-debug.apk ../salida/PulsePC.apk
+          printf '{"versionCode": %s, "versionName": "%s", "commit": "%s"}\n' "$CODIGO" "$NOMBRE" "$GITHUB_SHA" > ../salida/version.json
+          cat ../salida/version.json
+
+      - name: Publicar en la release "apk"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view apk >/dev/null 2>&1 || gh release create apk --title "PulsePC · app Android" \
+            --notes "Última versión de la app, compilada automáticamente. PulsePC la instala sola en el móvil al conectarlo por USB." --latest
+          gh release upload apk salida/PulsePC.apk salida/version.json --clobber

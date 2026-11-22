@@ -10,13 +10,30 @@ android {
         applicationId 'com.pulsopc.app'
         minSdk 23          // Android 6.0 Marshmallow
         targetSdk 34
-        versionCode 7
-        versionName '0.7'
+        // GitHub compila la app en cada cambio y le pone un numero de version mayor
+        // (-PcodigoVersion): asi PulsePC sabe si el movil tiene una version antigua.
+        versionCode (project.findProperty('codigoVersion') ?: '8') as int
+        versionName '0.8' + (project.hasProperty('codigoVersion') ? '.' + project.findProperty('codigoVersion') : '')
+    }
+
+    // Misma firma en todos los PCs y en GitHub: si no, Android no deja actualizar la app
+    // encima de una compilada en otro sitio. Es una clave de depuracion, no secreta.
+    signingConfigs {
+        debug {
+            storeFile rootProject.file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
+            signingConfig signingConfigs.debug
         }
     }
 
