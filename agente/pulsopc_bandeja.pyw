@@ -88,7 +88,7 @@ def comando_arranque():
 def _ps(script):
     import subprocess
     return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-                          capture_output=True, text=True, timeout=30, creationflags=SIN_VENTANA)
+                          capture_output=True, text=True, errors="replace", timeout=30, creationflags=SIN_VENTANA)
 
 
 def tarea_existe():

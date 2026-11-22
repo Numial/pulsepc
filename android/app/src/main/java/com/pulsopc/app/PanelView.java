@@ -404,19 +404,24 @@ public class PanelView extends View {
         if (!tituloM.isEmpty()) {
             // Portada a la izquierda (si hay espacio), titulo y artista a su lado
             float lado = Math.min(Math.max(44 * dp, h * 0.32f), w * 0.4f);
-            float tx = x;
+            // El hueco de la portada se reserva siempre: si no, al llegar la portada (a veces
+            // unos segundos despues que el titulo) los botones saltaban y se pulsaba en vacio.
+            r.set(x, top, x + lado, top + lado);
             if (portada != null) {
-                r.set(x, top, x + lado, top + lado);
                 c.save();
                 ruta.reset();
                 ruta.addRoundRect(r, 6 * dp, 6 * dp, Path.Direction.CW);
                 c.clipPath(ruta);
                 c.drawBitmap(portada, null, r, pImagen);
                 c.restore();
-                tx = x + lado + 10 * dp;
+            } else {
+                pRelleno.setColor(PISTA);
+                c.drawRoundRect(r, 6 * dp, 6 * dp, pRelleno);
+                notaMusical(c, x + lado / 2, top + lado / 2, lado * 0.18f);
             }
+            float tx = x + lado + 10 * dp;
             float tw = x + w - tx;
-            float cy = portada != null ? top + lado / 2 - 8 * dp : top + 6 * dp;
+            float cy = top + lado / 2 - 8 * dp;
             pTexto.setTextAlign(Paint.Align.LEFT);
             pTexto.setColor(TEXTO);
             pTexto.setTextSize(16 * dp);
@@ -427,7 +432,7 @@ public class PanelView extends View {
             String app = m.optString("app", "");
             if (!app.isEmpty()) sub = sub.isEmpty() ? app : sub + "  ·  " + app;
             c.drawText(encajar(sub, tw), tx, cy + 26 * dp, pTexto);
-            top += (portada != null ? lado : 34 * dp) + 8 * dp;
+            top += lado + 8 * dp;
         }
         // Dos filas de botones: anterior / play-pausa / siguiente y volumen - / silencio / +
         float zonaH = y + h - top;
@@ -448,6 +453,16 @@ public class PanelView extends View {
                 icono(c, acc, cx, cy, b * 0.22f, activo ? FONDO : TEXTO, sonando);
             }
         }
+    }
+
+    /** Nota musical tenue para el hueco de la portada mientras no hay imagen. */
+    private void notaMusical(Canvas c, float cx, float cy, float t) {
+        pRelleno.setColor(TENUE);
+        pTrazo.setColor(TENUE);
+        pTrazo.setStrokeWidth(Math.max(2 * dp, t * 0.22f));
+        c.drawCircle(cx - t * 0.5f, cy + t * 0.9f, t * 0.55f, pRelleno);
+        c.drawLine(cx, cy + t * 0.9f, cx, cy - t * 1.3f, pTrazo);
+        c.drawLine(cx, cy - t * 1.3f, cx + t * 0.8f, cy - t * 0.8f, pTrazo);
     }
 
     /** Iconos dibujados con formas (sin depender de fuentes con emojis, que en Android 6 fallan). */
@@ -507,12 +522,21 @@ public class PanelView extends View {
             case "red": nombre = "Red (bajada)"; hist = histBajada; max = 0; valor = velocidad(hist[cabeza]); break;
             default: nombre = "CPU"; hist = histCpu; max = 100; valor = Math.round(hist[cabeza]) + " %";
         }
-        titulo(c, nombre, x, y, w);
+        // Titulo y valor en la misma linea si caben; si no (tarjeta estrecha), el valor baja
+        // a su propia linea en vez de pisar el titulo.
+        float tamV = Math.min(28 * dp, h * 0.18f);
+        pTexto.setTextSize(tamV);
+        float anchoV = pTexto.measureText(valor);
+        pTexto.setTextSize(12 * dp);
+        String tit = (tituloActual != null && !tituloActual.isEmpty() ? tituloActual : nombre).toUpperCase(Locale.ROOT);
+        boolean juntos = pTexto.measureText(tit) + anchoV + 10 * dp <= w;
+        titulo(c, nombre, x, y, juntos ? w - anchoV - 10 * dp : w);
         pTexto.setTextAlign(Paint.Align.RIGHT);
         pTexto.setColor(TEXTO);
-        pTexto.setTextSize(Math.min(28 * dp, h * 0.18f));
-        c.drawText(valor, x + w, y + Math.min(28 * dp, h * 0.18f), pTexto);
-        float gy = y + Math.min(28 * dp, h * 0.18f) + 10 * dp;
+        pTexto.setTextSize(tamV);
+        float baseV = juntos ? y + tamV : y + 16 * dp + tamV;
+        c.drawText(encajar(valor, w), x + w, baseV, pTexto);
+        float gy = baseV + 10 * dp;
         float gh = y + h - gy;
         // Relleno suave bajo la linea
         if (max <= 0) { for (float v : hist) max = Math.max(max, v); if (max <= 0) max = 1; }
@@ -638,7 +662,8 @@ public class PanelView extends View {
         if (sub != null) {
             pTexto.setColor(TENUE);
             pTexto.setTextSize(Math.max(10 * dp, radio * 0.2f));
-            c.drawText(encajar(sub, radio * 1.6f), cx, cy + radio * 0.6f, pTexto);
+            // A esa altura el anillo esta a +-0.8 radios del centro: se deja margen para no tocarlo.
+            c.drawText(encajar(sub, radio * 1.3f), cx, cy + radio * 0.6f, pTexto);
         }
     }
 

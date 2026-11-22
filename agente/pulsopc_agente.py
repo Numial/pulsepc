@@ -89,7 +89,7 @@ def bucle_gpu():
         try:
             proc = subprocess.Popen([exe, "--query-gpu=" + CAMPOS_GPU, "--format=csv,noheader,nounits",
                                      "-lms", "1000"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                    text=True, creationflags=SIN_VENTANA)
+                                    text=True, errors="replace", creationflags=SIN_VENTANA)
             _procesos.append(proc)
             for linea in proc.stdout:
                 r = _parsear_gpu(linea)
@@ -124,7 +124,7 @@ def pawnio_instalado():
     if platform.system() != "Windows":
         return True
     try:
-        out = subprocess.run(["sc", "query", "PawnIO"], capture_output=True, text=True,
+        out = subprocess.run(["sc", "query", "PawnIO"], capture_output=True, text=True, errors="replace",
                              timeout=5, creationflags=SIN_VENTANA)
         return out.returncode == 0
     except Exception:
@@ -192,7 +192,7 @@ def bucle_lhm():
             proc = subprocess.Popen(
                 ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                  "-File", script, "-Dir", LHM_DIR],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors="replace", encoding="utf-8",
                 creationflags=SIN_VENTANA)
             _procesos.append(proc)
             for linea in proc.stdout:
@@ -222,10 +222,24 @@ def bucle_lhm():
         espera = min(espera * 2, 300)
 
 
+_tunel_usb = {"adb": None, "regla": None, "serials": set()}
+
+
 def _cerrar_procesos():
     for p in _procesos:
         try:
             p.kill()
+        except Exception:
+            pass
+    # Quitar el tunel "adb reverse" al cerrar. Si se queda puesto con el agente cerrado,
+    # la app sigue intentando conectar por el cable, cada intento hace que el servidor de
+    # adb del PC intente abrir el puerto cerrado (en Windows tarda ~2 s en fallar) y el
+    # servidor de adb se queda bloqueado: hasta "adb devices" deja de responder.
+    adb, regla = _tunel_usb["adb"], _tunel_usb["regla"]
+    for sn in list(_tunel_usb["serials"]):
+        try:
+            subprocess.run([adb, "-s", sn, "reverse", "--remove", regla], capture_output=True,
+                           timeout=3, creationflags=0x08000000 if platform.system() == "Windows" else 0)
         except Exception:
             pass
 
@@ -405,7 +419,7 @@ def bucle_medios():
                 continue
             proc = subprocess.Popen(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
                                      "Bypass", "-File", script], stdout=subprocess.PIPE,
-                                    stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                                    stderr=subprocess.DEVNULL, text=True, errors="replace", encoding="utf-8",
                                     creationflags=SIN_VENTANA)
             _procesos.append(proc)
             for linea in proc.stdout:
@@ -611,7 +625,7 @@ def bucle_usb(puerto_http, mantener_app=True):
     regla = "tcp:%d" % puerto_http
 
     def sh(sn, *args):
-        return subprocess.run([adb, "-s", sn] + list(args), capture_output=True, text=True,
+        return subprocess.run([adb, "-s", sn] + list(args), capture_output=True, text=True, errors="replace",
                               timeout=5, creationflags=flags).stdout
 
     def abrir_app(sn):
@@ -629,7 +643,7 @@ def bucle_usb(puerto_http, mantener_app=True):
     conocidos = set()
     while True:
         try:
-            out = subprocess.run([adb, "devices"], capture_output=True, text=True,
+            out = subprocess.run([adb, "devices"], capture_output=True, text=True, errors="replace",
                                  timeout=5, creationflags=flags).stdout
             lineas = out.splitlines()[1:]
             if any(l.strip().endswith("offline") for l in lineas):
@@ -637,8 +651,10 @@ def bucle_usb(puerto_http, mantener_app=True):
                 subprocess.run([adb, "reconnect", "offline"], capture_output=True,
                                timeout=5, creationflags=flags)
             serials = [l.split()[0] for l in lineas if l.strip().endswith("device")]
+            _tunel_usb["adb"], _tunel_usb["regla"] = adb, regla
             for sn in serials:
                 sh(sn, "reverse", regla, regla)
+                _tunel_usb["serials"].add(sn)
                 if sn not in conocidos:
                     avisar("Movil conectado por USB. Abriendo PulsoPC...")
                     sh(sn, "shell", "svc", "power", "stayon", "usb")  # pantalla encendida con USB

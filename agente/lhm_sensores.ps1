@@ -9,6 +9,20 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+# Vigilancia del agente: en Windows PowerShell escribir en la salida NO falla aunque el
+# agente se haya cerrado (la tuberia no avisa), asi que este script quedaria vivo para
+# siempre. Se apunta quien lo lanzo y se termina en cuanto ese proceso desaparece.
+$padre = $null
+try {
+    $idPadre = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
+    $padre = [System.Diagnostics.Process]::GetProcessById([int]$idPadre)
+} catch { $padre = $null }
+
+function AgenteVivo {
+    if ($padre -eq $null) { return $true }
+    try { $padre.Refresh(); return -not $padre.HasExited } catch { return $false }
+}
+
 try {
     # Sus dependencias (HidSharp, etc.) se resuelven solas desde la misma carpeta.
     [void][System.Reflection.Assembly]::LoadFrom((Join-Path $Dir 'LibreHardwareMonitorLib.dll'))
@@ -44,7 +58,7 @@ function Leer($hw, $lista) {
     foreach ($sub in $hw.SubHardware) { Leer $sub $lista }
 }
 
-while ($true) {
+while (AgenteVivo) {
     $lista = New-Object System.Collections.ArrayList
     foreach ($hw in $pc.Hardware) {
         try { Leer $hw $lista } catch { }
