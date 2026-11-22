@@ -40,6 +40,62 @@ _ultimo = {"stats": {}, "lock": threading.Lock(), "pedido": 0.0, "via": ""}
 estado = {"usb": set(), "avisos": []}
 
 
+# ------------------------------------------------------------------ idioma --
+# Idioma de PulsePC (espanol o ingles): lo usan la bandeja, el editor, el Nest Hub y
+# la app del movil (llega con /stats). Se guarda en agente/pulsopc_ajustes.json.
+
+RUTA_AJUSTES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsopc_ajustes.json")
+IDIOMAS = ("es", "en")
+_ajustes = {}
+
+
+def _idioma_sistema():
+    try:
+        import locale
+        nombre = (locale.getlocale()[0] or "").lower()
+    except Exception:
+        nombre = ""
+    if not nombre and platform.system() == "Windows":
+        try:
+            import ctypes
+            import locale
+            nombre = locale.windows_locale.get(ctypes.windll.kernel32.GetUserDefaultUILanguage(), "").lower()
+        except Exception:
+            nombre = ""
+    return "es" if nombre.startswith(("es", "spanish", "catalan", "galician", "basque", "ca", "gl", "eu")) or not nombre else "en"
+
+
+def cargar_ajustes():
+    try:
+        with open(RUTA_AJUSTES, encoding="utf-8") as f:
+            _ajustes.update(json.load(f))
+    except Exception:
+        pass
+    if _ajustes.get("idioma") not in IDIOMAS:
+        _ajustes["idioma"] = _idioma_sistema()
+
+
+def idioma():
+    if "idioma" not in _ajustes:
+        cargar_ajustes()
+    return _ajustes["idioma"]
+
+
+def poner_idioma(valor):
+    if valor not in IDIOMAS:
+        raise ValueError("idioma no valido")
+    _ajustes["idioma"] = valor
+    tmp = RUTA_AJUSTES + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(_ajustes, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, RUTA_AJUSTES)
+
+
+def tr(es, en):
+    """Texto en el idioma elegido."""
+    return en if idioma() == "en" else es
+
+
 def avisar(texto):
     """Mensaje para el usuario: consola si la hay; si no, notificacion de la bandeja."""
     print(texto)
@@ -152,7 +208,7 @@ def asegurar_lhm():
         return True
     import io
     import zipfile
-    estado_lhm["texto"] = "Sensores: descargando LibreHardwareMonitor..."
+    estado_lhm["texto"] = tr("Sensores: descargando LibreHardwareMonitor...", "Sensors: downloading LibreHardwareMonitor...")
     req = urllib.request.Request(LHM_API, headers={"User-Agent": "PulsePC",
                                                    "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=20) as r:
@@ -181,7 +237,7 @@ def asegurar_lhm():
             fd.write(fo.read())
     with open(os.path.join(LHM_DIR, "VERSION.txt"), "w") as f:
         f.write("%s %s\n" % (rel.get("tag_name"), asset["name"]))
-    avisar("LibreHardwareMonitor %s listo para leer sensores." % rel.get("tag_name"))
+    avisar(tr("LibreHardwareMonitor %s listo para leer sensores.", "LibreHardwareMonitor %s ready to read sensors.") % rel.get("tag_name"))
     return os.path.isfile(os.path.join(LHM_DIR, "LibreHardwareMonitorLib.dll"))
 
 
@@ -211,17 +267,17 @@ def bucle_lhm():
                 _lhm["t"] = time.time()
                 hay_cpu = any(x["tipo_hw"] == "Cpu" and x["tipo"] == "Temperature" for x in _lhm["sensores"])
                 if hay_cpu:
-                    estado_lhm["texto"] = "Sensores: OK (LibreHardwareMonitor)"
+                    estado_lhm["texto"] = tr("Sensores: OK (LibreHardwareMonitor)", "Sensors: OK (LibreHardwareMonitor)")
                 elif not es_admin():
-                    estado_lhm["texto"] = "Sensores: sin temperatura de CPU (hace falta administrador)"
+                    estado_lhm["texto"] = tr("Sensores: sin temperatura de CPU (hace falta administrador)", "Sensors: no CPU temperature (needs administrator)")
                 elif not pawnio_instalado():
-                    estado_lhm["texto"] = "Sensores: falta el driver PawnIO para la CPU"
+                    estado_lhm["texto"] = tr("Sensores: falta el driver PawnIO para la CPU", "Sensors: the PawnIO driver is missing for the CPU")
                 else:
-                    estado_lhm["texto"] = "Sensores: la CPU no da temperatura"
+                    estado_lhm["texto"] = tr("Sensores: la CPU no da temperatura", "Sensors: the CPU reports no temperature")
                 espera = 5
             raise RuntimeError("el lector de sensores se ha cerrado")
         except Exception as e:
-            estado_lhm["texto"] = "Sensores: error (%s)" % e
+            estado_lhm["texto"] = tr("Sensores: error (%s)", "Sensors: error (%s)") % e
             print("LibreHardwareMonitor:", e)
         time.sleep(espera)
         espera = min(espera * 2, 300)
@@ -626,7 +682,8 @@ def bucle_usb(puerto_http, mantener_app=True):
     """
     adb = buscar_adb()
     if not adb:
-        avisar("USB: no encuentro adb (instala Android Platform Tools); solo Wi-Fi.")
+        avisar(tr("USB: no encuentro adb (instala Android Platform Tools); solo Wi-Fi.",
+                  "USB: adb not found (install Android Platform Tools); Wi-Fi only."))
         return
     flags = 0x08000000 if platform.system() == "Windows" else 0
     regla = "tcp:%d" % puerto_http
@@ -663,7 +720,7 @@ def bucle_usb(puerto_http, mantener_app=True):
                 sh(sn, "reverse", regla, regla)
                 _tunel_usb["serials"].add(sn)
                 if sn not in conocidos:
-                    avisar("Movil conectado por USB. Abriendo PulsePC...")
+                    avisar(tr("Móvil conectado por USB. Abriendo PulsePC...", "Phone connected over USB. Opening PulsePC..."))
                     sh(sn, "shell", "svc", "power", "stayon", "usb")  # pantalla encendida con USB
                     abrir_app(sn)
                     conocidos.add(sn)
@@ -963,6 +1020,7 @@ class Manejador(BaseHTTPRequestHandler):
             with _ultimo["lock"]:
                 datos = dict(_ultimo["stats"])
             datos["diseno"] = diseno_actual("pantalla" if pantalla else "movil")
+            datos["idioma"] = idioma()
             if pantalla:
                 # Version de pantalla.html: si cambia (PulsePC actualizado), la pagina abierta
                 # en el Nest Hub se recarga sola en vez de seguir con el codigo antiguo.
@@ -985,6 +1043,8 @@ class Manejador(BaseHTTPRequestHandler):
                 datos = f.read()
             tipo = "image/png" if datos[:4] == b"\x89PNG" else "image/jpeg"
             self._enviar(200, datos, tipo)
+        elif ruta == "/ajustes":
+            self._json({"idioma": idioma()})
         elif ruta == "/imagen":
             nombre = self.path.split("id=", 1)[-1].split("&")[0] if "id=" in self.path else ""
             if not RE_IMAGEN.match(nombre) or not os.path.isfile(os.path.join(DIR_IMAGENES, nombre)):
@@ -1032,6 +1092,18 @@ class Manejador(BaseHTTPRequestHandler):
                 _cerrar_procesos()
                 os._exit(0)
             threading.Thread(target=_salir, daemon=True).start()
+            return
+        if self.path.split("?")[0] == "/ajustes":
+            # Idioma de PulsePC: solo desde el propio PC (editor).
+            if not self._es_local():
+                self._json({"error": "solo desde el PC"}, 403)
+                return
+            try:
+                n = int(self.headers.get("Content-Length", "0"))
+                poner_idioma(json.loads(self.rfile.read(min(n, 1000)).decode("utf-8")).get("idioma"))
+                self._json({"ok": True, "idioma": idioma()})
+            except Exception as e:
+                self._json({"error": str(e)}, 400)
             return
         if self.path.split("?")[0] == "/imagen":
             # Subir una foto o GIF para el widget Imagen: solo desde el propio PC (el editor).
@@ -1123,6 +1195,7 @@ def arrancar(puerto=PUERTO_HTTP, intervalo=1.0, mantener_app=True):
     Lanza OSError si el puerto ya esta en uso (otro agente abierto)."""
     srv = Servidor(("0.0.0.0", puerto), Manejador)
     _crear_token()
+    cargar_ajustes()
     cargar_diseno()
     threading.Thread(target=bucle_gpu, daemon=True).start()
     threading.Thread(target=bucle_lhm, daemon=True).start()

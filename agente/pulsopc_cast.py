@@ -105,8 +105,10 @@ def enviar(uuid, url):
     except Exception as e:
         logging.info("Enviar a %s: %r", cast.cast_info.friendly_name, e)
         if "Timeout" in type(e).__name__ or "timed out" in str(e).lower():
-            raise RuntimeError("%s no responde. Reinícialo (desenchúfalo 10 s) y vuelve a probar."
-                               % (cast.cast_info.friendly_name or "La pantalla"))
+            import pulsopc_agente
+            raise RuntimeError(pulsopc_agente.tr("%s no responde. Reinícialo (desenchúfalo 10 s) y vuelve a probar.",
+                                                 "%s is not responding. Restart it (unplug it for 10 s) and try again.")
+                               % (cast.cast_info.friendly_name or "Nest Hub"))
         raise
     estado["enviando"] = cast.cast_info.friendly_name or "Pantalla"
     estado["error"] = ""

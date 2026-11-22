@@ -44,9 +44,11 @@ canvas{flex:1;width:100%;min-height:0}
 #espera{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:4vh;opacity:.5}
 </style></head><body>
 <div id="raiz"><div id="cab"><b id="equipo">PulsePC</b><span id="hora"></span></div><div id="rejilla"></div></div>
-<div id="puntos"></div><div id="espera">PulsePC · esperando al PC…</div>
+<div id="puntos"></div><div id="espera"></div>
 <script>
-var IMGS={};
+var IMGS={},EN=false;
+function L(es,en){return EN?en:es}
+function LOC(){return EN?"en-GB":"es-ES"}
 var S=null,D=null,pag=0,cambio=Date.now(),hist={},HMAX=120,ultOK=0,versionD=null;
 function e(x){return String(x==null?"":x).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function n(x,d){return x==null||isNaN(x)?"–":Number(x).toFixed(d||0)}
@@ -60,39 +62,40 @@ function valor(m){
   if(m=="temp_gpu"){var g2=gpu0();return g2&&g2.temp} if(m=="red")return S.red&&(S.red.bajada_kbs+S.red.subida_kbs);
 }
 var NOMBRE_M={cpu:"CPU",gpu:"GPU",ram:"Memoria",temp_cpu:"Temperatura CPU",temp_gpu:"Temperatura GPU",red:"Red"};
+var NOMBRE_M_EN={cpu:"CPU",gpu:"GPU",ram:"Memory",temp_cpu:"CPU temperature",temp_gpu:"GPU temperature",red:"Network"};
 function guardarHist(){for(var m in NOMBRE_M){var v=valor(m);if(v==null)continue;(hist[m]=hist[m]||[]).push(v);if(hist[m].length>HMAX)hist[m].shift()}}
 
 var W={
  cpu:function(){var c=S.cpu||{};return{t:"CPU",a:c.temp>=D.alerta_temp,h:'<div class="g">'+n(c.uso)+'<small> %</small></div>'+bar(c.uso)+
    '<div class="s">'+(c.temp!=null?n(c.temp)+' °C · ':'')+(c.freq_mhz?n(c.freq_mhz/1000,2)+' GHz':'')+(c.consumo_w!=null?' · '+n(c.consumo_w)+' W':'')+'</div>'}},
- ram:function(){var r=S.ram||{};return{t:"Memoria",h:'<div class="g">'+n(r.porcentaje)+'<small> %</small></div>'+bar(r.porcentaje,"var(--sec)")+
+ ram:function(){var r=S.ram||{};return{t:L("Memoria","Memory"),h:'<div class="g">'+n(r.porcentaje)+'<small> %</small></div>'+bar(r.porcentaje,"var(--sec)")+
    '<div class="s">'+n(r.usada_gb,1)+' / '+n(r.total_gb,1)+' GB</div>'}},
- gpu:function(){var g=gpu0();if(!g)return{t:"GPU",h:'<div class="s">Sin GPU NVIDIA</div>'};
+ gpu:function(){var g=gpu0();if(!g)return{t:"GPU",h:'<div class="s">'+L("Sin GPU NVIDIA","No NVIDIA GPU")+'</div>'};
    return{t:g.nombre||"GPU",a:g.temp>=D.alerta_temp,h:'<div class="g">'+n(g.uso)+'<small> %</small></div>'+bar(g.uso)+
    '<div class="s">'+n(g.temp)+' °C · '+n(g.vram_usada_mb/1024,1)+' / '+n(g.vram_total_mb/1024,1)+' GB</div>'}},
- gpu_detalle:function(){var g=gpu0();if(!g)return{t:"GPU",h:'<div class="s">Sin GPU NVIDIA</div>'};
-   return{t:(g.nombre||"GPU")+" · detalle",a:g.temp>=D.alerta_temp,h:li("Núcleo",n(g.reloj_mhz)+" MHz")+li("Memoria",n(g.reloj_mem_mhz)+" MHz")+
-   li("Consumo",n(g.consumo_w)+" / "+n(g.limite_w)+" W")+li("Ventilador",n(g.ventilador)+" %")+li("Temperatura",n(g.temp)+" °C")}},
+ gpu_detalle:function(){var g=gpu0();if(!g)return{t:"GPU",h:'<div class="s">'+L("Sin GPU NVIDIA","No NVIDIA GPU")+'</div>'};
+   return{t:(g.nombre||"GPU")+L(" · detalle"," · detail"),a:g.temp>=D.alerta_temp,h:li(L("Núcleo","Core"),n(g.reloj_mhz)+" MHz")+li(L("Memoria","Memory"),n(g.reloj_mem_mhz)+" MHz")+
+   li(L("Consumo","Power"),n(g.consumo_w)+" / "+n(g.limite_w)+" W")+li(L("Ventilador","Fan"),n(g.ventilador)+" %")+li(L("Temperatura","Temperature"),n(g.temp)+" °C")}},
  temps:function(){var h="",t=S.temperaturas||[];for(var i=0;i<t.length&&i<8;i++)h+=li(t[i].sensor==t[i].dispositivo?t[i].sensor:t[i].dispositivo+" · "+t[i].sensor,n(t[i].valor)+" °C");
-   return{t:"Temperaturas",h:h||'<div class="s">Sin sensores</div>'}},
- red:function(){var r=S.red||{};return{t:"Red",h:'<div class="g" style="font-size:5vh">↓ '+vel(r.bajada_kbs)+'</div><div class="g" style="font-size:5vh;color:var(--sec)">↑ '+vel(r.subida_kbs)+'</div>'}},
- disco:function(){var d=S.disco||{},h=li("Lectura",vel(d.lectura_kbs))+li("Escritura",vel(d.escritura_kbs)),u=d.unidades||[];
-   for(var i=0;i<u.length&&i<3;i++)h+=li(u[i].unidad,n(u[i].usado_gb)+" / "+n(u[i].total_gb)+" GB")+bar(u[i].porcentaje,"var(--sec)");return{t:"Discos",h:h}},
+   return{t:L("Temperaturas","Temperatures"),h:h||'<div class="s">'+L("Sin sensores","No sensors")+'</div>'}},
+ red:function(){var r=S.red||{};return{t:L("Red","Network"),h:'<div class="g" style="font-size:5vh">↓ '+vel(r.bajada_kbs)+'</div><div class="g" style="font-size:5vh;color:var(--sec)">↑ '+vel(r.subida_kbs)+'</div>'}},
+ disco:function(){var d=S.disco||{},h=li(L("Lectura","Read"),vel(d.lectura_kbs))+li(L("Escritura","Write"),vel(d.escritura_kbs)),u=d.unidades||[];
+   for(var i=0;i<u.length&&i<3;i++)h+=li(u[i].unidad,n(u[i].usado_gb)+" / "+n(u[i].total_gb)+" GB")+bar(u[i].porcentaje,"var(--sec)");return{t:L("Discos","Disks"),h:h}},
  nucleos:function(){var c=(S.cpu&&S.cpu.nucleos)||[],h="";for(var i=0;i<c.length;i++)h+='<i style="height:'+Math.max(1,c[i])+'%"></i>';
-   return{t:"Núcleos ("+c.length+")",h:'<div class="cores">'+h+'</div>'}},
+   return{t:L("Núcleos (","Cores (")+c.length+")",h:'<div class="cores">'+h+'</div>'}},
  ventiladores:function(){var h="",f=S.ventiladores||[],p=S.consumos||[];for(var i=0;i<f.length&&i<5;i++)h+=li(f[i].sensor,n(f[i].rpm)+" rpm");
-   for(var j=0;j<p.length&&j<4;j++)h+=li(p[j].dispositivo+" · "+p[j].sensor,n(p[j].w)+" W");return{t:"Ventiladores y consumo",h:h||'<div class="s">Sin datos</div>'}},
- reloj:function(){var d=new Date();return{t:"",h:'<div class="reloj"><div class="g">'+d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})+'</div><div class="s">'+
-   d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})+'</div></div>'}},
- procesos:function(){var p=S.procesos||[],h="";for(var i=0;i<p.length&&i<7;i++)h+=li(p[i].nombre,n(p[i].cpu)+" %");return{t:"Procesos",h:h||'<div class="s">–</div>'}},
- bateria:function(){var b=S.bateria;if(!b)return{t:"Batería",h:'<div class="s">Sin batería</div>'};
-   return{t:"Batería",h:'<div class="g">'+n(b.porcentaje)+'<small> %</small></div>'+bar(b.porcentaje)+'<div class="s">'+(b.cargando?"Cargando":b.minutos?Math.floor(b.minutos/60)+" h "+(b.minutos%60)+" min":"")+'</div>'}},
- multimedia:function(){var m=S.medios||{};if(!m.titulo)return{t:"Multimedia",h:'<div class="s">No suena nada</div>'};
-   return{t:"Suena ahora"+(m.app?" · "+m.app:""),h:'<div class="med">'+(m.portada_id?'<span class="ph" data-src="/portada?id='+encodeURIComponent(m.portada_id)+'"></span>':'')+
-   '<div style="min-width:0"><div class="g">'+e(m.titulo)+'</div><div class="s">'+e(m.artista||"")+(m.estado=="pausa"?" · en pausa":"")+'</div></div></div>'}},
- imagen:function(w){if(!w.imagen)return{t:"Imagen",h:'<div class="s">Elige una foto o un GIF en el editor</div>'};
+   for(var j=0;j<p.length&&j<4;j++)h+=li(p[j].dispositivo+" · "+p[j].sensor,n(p[j].w)+" W");return{t:L("Ventiladores y consumo","Fans and power"),h:h||'<div class="s">'+L("Sin datos","No data")+'</div>'}},
+ reloj:function(){var d=new Date();return{t:"",h:'<div class="reloj"><div class="g">'+d.toLocaleTimeString(LOC(),{hour:"2-digit",minute:"2-digit"})+'</div><div class="s">'+
+   d.toLocaleDateString(LOC(),{weekday:"long",day:"numeric",month:"long"})+'</div></div>'}},
+ procesos:function(){var p=S.procesos||[],h="";for(var i=0;i<p.length&&i<7;i++)h+=li(p[i].nombre,n(p[i].cpu)+" %");return{t:L("Procesos","Processes"),h:h||'<div class="s">–</div>'}},
+ bateria:function(){var b=S.bateria;if(!b)return{t:L("Batería","Battery"),h:'<div class="s">'+L("Sin batería","No battery")+'</div>'};
+   return{t:L("Batería","Battery"),h:'<div class="g">'+n(b.porcentaje)+'<small> %</small></div>'+bar(b.porcentaje)+'<div class="s">'+(b.cargando?L("Cargando","Charging"):b.minutos?Math.floor(b.minutos/60)+" h "+(b.minutos%60)+" min":"")+'</div>'}},
+ multimedia:function(){var m=S.medios||{};if(!m.titulo)return{t:"Multimedia",h:'<div class="s">'+L("No suena nada","Nothing playing")+'</div>'};
+   return{t:L("Suena ahora","Now playing")+(m.app?" · "+m.app:""),h:'<div class="med">'+(m.portada_id?'<span class="ph" data-src="/portada?id='+encodeURIComponent(m.portada_id)+'"></span>':'')+
+   '<div style="min-width:0"><div class="g">'+e(m.titulo)+'</div><div class="s">'+e(m.artista||"")+(m.estado=="pausa"?L(" · en pausa"," · paused"):"")+'</div></div></div>'}},
+ imagen:function(w){if(!w.imagen)return{t:L("Imagen","Image"),h:'<div class="s">'+L("Elige una foto o un GIF en el editor","Choose a photo or GIF in the editor")+'</div>'};
    return{t:"",img:1,h:'<span class="ph" data-src="/imagen?id='+encodeURIComponent(w.imagen)+'" data-ajuste="'+(w.ajuste=="contener"?"contain":"cover")+'"></span>'}},
- grafica:function(w){var m=w.metrica||"cpu",v=valor(m);return{t:NOMBRE_M[m],a:(m=="temp_cpu"||m=="temp_gpu")&&v>=D.alerta_temp,graf:m,
+ grafica:function(w){var m=w.metrica||"cpu",v=valor(m);return{t:(EN?NOMBRE_M_EN:NOMBRE_M)[m],a:(m=="temp_cpu"||m=="temp_gpu")&&v>=D.alerta_temp,graf:m,
    h:'<div class="g" style="font-size:4.5vh">'+(m=="red"?vel(v):n(v)+(m.indexOf("temp")==0?" °C":" %"))+'</div><canvas></canvas>'}}
 };
 
@@ -133,7 +136,7 @@ function pintar(){
   for(var j=0;j<grafs.length;j++)pintarGrafica(rj.children[grafs[j][0]].querySelector("canvas"),grafs[j][1]);
   document.getElementById("cab").style.display=D.cabecera?"flex":"none";
   document.getElementById("equipo").textContent=S.equipo||"PulsePC";
-  document.getElementById("hora").textContent=new Date().toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
+  document.getElementById("hora").textContent=new Date().toLocaleTimeString(LOC(),{hour:"2-digit",minute:"2-digit"});
   var pt="";for(var k=0;k<ps.length&&ps.length>1&&!(fija>=0);k++)pt+=k==pag?"●":"○";document.getElementById("puntos").textContent=pt;
 }
 function aplicarTema(){if(!D||D.version===versionD)return;versionD=D.version;var t=D.tema||{},s=document.documentElement.style;
@@ -143,7 +146,10 @@ function pedir(){var r=new XMLHttpRequest();r.open("GET","/stats?pantalla=1");r.
   r.onload=function(){try{var s=JSON.parse(r.responseText);
     // PulsePC actualizado: la pagina se recarga para no seguir con el codigo antiguo.
     if(s.pagina_v){if(PV===null)PV=s.pagina_v;else if(s.pagina_v!==PV){location.reload();return}}
+    if(s.idioma)EN=s.idioma=="en";document.documentElement.lang=EN?"en":"es";
+    document.getElementById("espera").textContent=L("PulsePC · esperando al PC…","PulsePC · waiting for the PC…");
     if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar()}catch(x){}};r.send()}
+document.getElementById("espera").textContent=L("PulsePC · esperando al PC…","PulsePC · waiting for the PC…");
 setInterval(pedir,1000);pedir();
 // Sin datos 30 s: se oscurece y avisa. Anti-quemado: se mueve un poco cada minuto.
 setInterval(function(){var sin=Date.now()-ultOK>30000;document.getElementById("espera").style.display=sin?"flex":"none";

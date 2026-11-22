@@ -266,7 +266,20 @@ def main():
     def instalar_pawnio(icon, item):
         ejecutar_elevado(["winget", "install", "--id", "namazso.PawnIO", "-e",
                           "--accept-package-agreements", "--accept-source-agreements"])
-        avisar_local("Instalando el driver PawnIO. Cuando termine, reinicia PulsePC.")
+        avisar_local(tr("Instalando el driver PawnIO. Cuando termine, reinicia PulsePC.",
+                        "Installing the PawnIO driver. When it finishes, restart PulsePC."))
+
+    tr = agente.tr
+
+    def L(es, en):
+        """Texto de menu que cambia con el idioma."""
+        return lambda it: tr(es, en)
+
+    def poner_idioma(valor):
+        def _accion(icon, item):
+            agente.poner_idioma(valor)
+            icon.update_menu()
+        return _accion
 
     def avisar_local(t):
         agente.estado["avisos"].append(t)
@@ -298,10 +311,10 @@ def main():
             def _e():
                 try:
                     cast.enviar(uuid, "http://%s:%d/pantalla" % (agente.ip_local(), agente.PUERTO_HTTP))
-                    avisar_local("Enviando PulsePC a %s." % cast.estado["enviando"])
+                    avisar_local(tr("Enviando PulsePC a %s.", "Sending PulsePC to %s.") % cast.estado["enviando"])
                 except Exception as e:
                     logging.info("Enviar a pantalla: %s", e)
-                    avisar_local("No pude enviar a la pantalla: %s" % e)
+                    avisar_local(tr("No pude enviar a la pantalla: %s", "Could not send to the display: %s") % e)
                 icon.update_menu()
             threading.Thread(target=_e, daemon=True).start()
         return _accion
@@ -315,42 +328,49 @@ def main():
     def opciones_pantalla():
         est = cast.estado
         if not cast.disponible():
-            yield pystray.MenuItem("Falta instalar pychromecast (abre iniciar_agente.bat)", None, enabled=False)
+            yield pystray.MenuItem(tr("Falta instalar pychromecast (abre iniciar_agente.bat)",
+                                      "pychromecast is not installed (open iniciar_agente.bat)"), None, enabled=False)
             return
         actual = cast.mostrando()
         if actual:
-            yield pystray.MenuItem("Dejar de enviar a %s" % actual, dejar_de_enviar)
+            yield pystray.MenuItem(tr("Dejar de enviar a %s", "Stop sending to %s") % actual, dejar_de_enviar)
             yield pystray.Menu.SEPARATOR
         for p in est["pantallas"]:
-            yield pystray.MenuItem("Enviar a %s" % p["nombre"], enviar_a(p["uuid"]),
+            yield pystray.MenuItem(tr("Enviar a %s", "Send to %s") % p["nombre"], enviar_a(p["uuid"]),
                                    checked=(lambda it, n=p["nombre"]: cast.estado["enviando"] == n), radio=True)
         if est["buscando"]:
-            yield pystray.MenuItem("Buscando pantallas…", None, enabled=False)
+            yield pystray.MenuItem(tr("Buscando pantallas…", "Looking for displays…"), None, enabled=False)
         elif est["buscado"] and not est["pantallas"]:
-            yield pystray.MenuItem("No encuentro ninguna pantalla en tu Wi-Fi", None, enabled=False)
-        yield pystray.MenuItem("Buscar pantallas otra vez", buscar_pantallas, enabled=not est["buscando"])
+            yield pystray.MenuItem(tr("No encuentro ninguna pantalla en tu Wi-Fi", "No displays found on your Wi-Fi"), None, enabled=False)
+        yield pystray.MenuItem(tr("Buscar pantallas otra vez", "Search for displays again"), buscar_pantallas, enabled=not est["buscando"])
 
     menu = pystray.Menu(
         pystray.MenuItem(lambda it: agente.estado_lhm["texto"], None, enabled=False),
-        pystray.MenuItem("Reiniciar como administrador (temperatura de CPU)", reiniciar_admin,
+        pystray.MenuItem(L("Reiniciar como administrador (temperatura de CPU)",
+                           "Restart as administrator (CPU temperature)"), reiniciar_admin,
                          visible=lambda it: es_windows and not agente.es_admin()),
-        pystray.MenuItem("Instalar driver de sensores (PawnIO)", instalar_pawnio,
+        pystray.MenuItem(L("Instalar driver de sensores (PawnIO)", "Install sensor driver (PawnIO)"), instalar_pawnio,
                          visible=lambda it: es_windows and agente.es_admin() and not agente.pawnio_instalado()),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Personalizar el móvil", lambda i, it: webbrowser.open(url + "/editor"), default=True),
-        pystray.MenuItem("Personalizar el Nest Hub", lambda i, it: webbrowser.open(url + "/editor#pantalla")),
-        pystray.MenuItem("Ver panel web", lambda i, it: webbrowser.open(url + "/pantalla")),
-        pystray.MenuItem(lambda it: ("Nest Hub: enviando a %s" % cast.mostrando()) if cast.mostrando()
-                         else "Enviar al Nest Hub", pystray.Menu(opciones_pantalla)),
+        pystray.MenuItem(L("Personalizar el móvil", "Customize the phone"), lambda i, it: webbrowser.open(url + "/editor"), default=True),
+        pystray.MenuItem(L("Personalizar el Nest Hub", "Customize the Nest Hub"), lambda i, it: webbrowser.open(url + "/editor#pantalla")),
+        pystray.MenuItem(L("Ver panel web", "Open web panel"), lambda i, it: webbrowser.open(url + "/pantalla")),
+        pystray.MenuItem(lambda it: (tr("Nest Hub: enviando a %s", "Nest Hub: sending to %s") % cast.mostrando())
+                         if cast.mostrando() else tr("Enviar al Nest Hub", "Send to Nest Hub"),
+                         pystray.Menu(opciones_pantalla)),
+        pystray.MenuItem("Idioma / Language", pystray.Menu(
+            pystray.MenuItem("Español", poner_idioma("es"), checked=lambda it: agente.idioma() == "es", radio=True),
+            pystray.MenuItem("English", poner_idioma("en"), checked=lambda it: agente.idioma() == "en", radio=True),
+        )),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Arrancar con Windows", alternar_arranque,
+        pystray.MenuItem(L("Arrancar con Windows", "Start with Windows"), alternar_arranque,
                          checked=lambda it: arranque_activado(), visible=es_windows),
-        pystray.MenuItem("Abrir registro", lambda i, it: os.startfile(os.path.join(DIR, "pulsopc.log"))
+        pystray.MenuItem(L("Abrir registro", "Open log"), lambda i, it: os.startfile(os.path.join(DIR, "pulsopc.log"))
                          if es_windows else None, visible=es_windows),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Salir de PulsePC", salir),
+        pystray.MenuItem(L("Salir de PulsePC", "Quit PulsePC"), salir),
     )
-    icon = pystray.Icon("PulsePC", ICONO_OFF, "PulsePC · esperando al móvil", menu)
+    icon = pystray.Icon("PulsePC", ICONO_OFF, tr("PulsePC · esperando al móvil", "PulsePC · waiting for the phone"), menu)
     ic = icon
 
     def vigilar():
@@ -360,10 +380,11 @@ def main():
             # revisa cada segundo: antes se decidia una sola vez al conectar (con la lista
             # de adb, que aun podia estar vacia) y se quedaba en "Wi-Fi" aunque fuera por cable.
             via = agente.via_movil()
-            if via != conectado:
-                conectado = via
+            if (via, agente.idioma()) != conectado:
+                conectado = (via, agente.idioma())
                 icon.icon = ICONO_ON if via else ICONO_OFF
-                icon.title = ("PulsePC · móvil conectado (%s)" % via) if via else "PulsePC · esperando al móvil"
+                icon.title = ((tr("PulsePC · móvil conectado (%s)", "PulsePC · phone connected (%s)") % via) if via
+                              else tr("PulsePC · esperando al móvil", "PulsePC · waiting for the phone"))
                 logging.info(icon.title)
             while agente.estado["avisos"]:
                 texto = agente.estado["avisos"].pop(0)

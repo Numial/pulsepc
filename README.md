@@ -75,6 +75,12 @@ No se envía solo: tú eliges cuándo desde el icono de la bandeja, en *Enviar a
 - **Por USB, el agente además** enciende la pantalla, la mantiene encendida mientras haya cable y vuelve a abrir la app si se cierra. Para desactivar esto último: `pulsopc_agente.py --no-mantener-app`.
 - Quita el PIN o patrón de bloqueo del móvil (pon *Ninguno* o *Deslizar*) para que la app se vea sin desbloquear.
 
+### Idioma / Language
+
+PulsePC está en **español e inglés**. Se cambia desde el editor (selector arriba) o desde el icono de la bandeja (*Idioma / Language*), y cambia a la vez el icono, el editor, el Nest Hub y la app del móvil.
+
+PulsePC is available in **Spanish and English**. Switch it from the editor (selector at the top) or from the tray icon (*Idioma / Language*); the tray, the editor, the Nest Hub and the phone app all follow it.
+
 ## 2. App Android
 
 - Java puro, sin librerías externas, `minSdk 23` (Android 6.0).

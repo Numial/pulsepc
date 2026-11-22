@@ -69,6 +69,7 @@ body.hub .solo-movil{display:none}
   <svg width="26" height="26" viewBox="0 0 48 48"><rect x="2" y="2" width="44" height="44" rx="9" fill="#0E1116"/><path d="M7 26h9l4-10 6 18 4-8h11" fill="none" stroke="#3EC7A0" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
   <h1>PulsePC · Personalizar</h1>
   <div class="destinos"><button id="dMovil">Móvil</button><button id="dHub">Nest Hub</button></div>
+  <select id="idioma" title="Idioma / Language" style="margin-left:12px"><option value="es">Español</option><option value="en">English</option></select>
   <span id="estado">Cargando…</span>
 </header>
 <main>
@@ -115,11 +116,29 @@ body.hub .solo-movil{display:none}
 </main>
 
 <script>
-const NOMBRES = {cpu:"CPU",ram:"Memoria",gpu:"GPU",temps:"Temperaturas",red:"Red",disco:"Discos",
-  nucleos:"Núcleos",gpu_detalle:"GPU detalle",ventiladores:"Ventiladores",reloj:"Reloj",
-  procesos:"Procesos",bateria:"Batería",multimedia:"Multimedia",grafica:"Gráfica",imagen:"Imagen / GIF"};
-const METRICAS = {cpu:"CPU",gpu:"GPU",ram:"Memoria",temp_cpu:"Temperatura CPU",temp_gpu:"Temperatura GPU",red:"Red (bajada)"};
-const ETQ_COLOR = {fondo:"Fondo",tarjeta:"Tarjetas",acento:"Acento",secundario:"Secundario",texto:"Texto"};
+const EN_T={"PulsePC · Personalizar": "PulsePC · Customize", "Móvil": "Phone", "Cargando…": "Loading…", "Páginas": "Pages", "+ Página": "+ Page", "En el Nest Hub": "On the Nest Hub", "Página que se ve": "Page shown", "Segundos por página": "Seconds per page", "El Nest Hub no deja tocar la pantalla, así que aquí eliges qué página se queda fija o cada cuánto se pasan.": "The Nest Hub doesn't allow touching the page, so here you choose which page stays fixed or how often pages change.", "Copiar el diseño del móvil": "Copy the phone layout", "Añadir widget": "Add widget", "Si una temperatura pasa del límite de alerta, su tarjeta parpadea en rojo en el móvil. Los botones del widget Multimedia controlan la música del PC.": "If a temperature goes over the alert limit, its card blinks red on the phone. The buttons of the Media widget control the PC's music.", "Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Los cambios se guardan solos y el móvil los aplica en un segundo. En el móvil, toca la pantalla para pasar de página.": "Drag widgets to reorder them and click one to change its size. Changes are saved automatically and the phone applies them within a second. On the phone, tap the screen to change page.", "Este es el diseño del Nest Hub, independiente del del móvil. Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Se guarda solo y, si estás enviando PulsePC al Nest Hub, lo aplica en un segundo. Para enviarlo, usa ": "This is the Nest Hub layout, separate from the phone's. Drag widgets to reorder them and click one to change its size. It saves automatically and, if you are sending PulsePC to the Nest Hub, it applies within a second. To send it, use ", "Enviar al Nest Hub": "Send to Nest Hub", " en el icono de PulsePC.": " in the PulsePC tray icon.", "Haz clic en un widget de la vista previa para editarlo.": "Click a widget in the preview to edit it.", "Colores": "Colors", "Mostrar cabecera": "Show header", "Alerta de temperatura (°C)": "Temperature alert (°C)", "Restaurar diseño original": "Restore original layout", "Memoria": "Memory", "Temperaturas": "Temperatures", "Red": "Network", "Discos": "Disks", "Núcleos": "Cores", "GPU detalle": "GPU detail", "Ventiladores": "Fans", "Reloj": "Clock", "Procesos": "Processes", "Batería": "Battery", "Multimedia": "Media", "Gráfica": "Chart", "Imagen / GIF": "Image / GIF", "Temperatura CPU": "CPU temperature", "Temperatura GPU": "GPU temperature", "Red (bajada)": "Network (download)", "Fondo": "Background", "Tarjetas": "Cards", "Acento": "Accent", "Secundario": "Secondary", "Texto": "Text", "Conectado al agente": "Connected to the agent", "Guardando…": "Saving…", "Guardado · el Nest Hub ya lo muestra": "Saved · the Nest Hub is showing it", "Guardado · el móvil ya lo muestra": "Saved · the phone is showing it", "No se pudo guardar: ": "Could not save: ", "Página actual": "Current page", "Nombre": "Name", "Columnas": "Columns", "Filas": "Rows", "Mover antes": "Move earlier", "Mover después": "Move later", "Borrar página": "Delete page", "Tiene que quedar al menos una página": "At least one page must remain", "Widget": "Widget", "Título": "Title", "Ancho (columnas)": "Width (columns)", "Alto (filas)": "Height (rows)", "Qué muestra": "Shows", "Tipo": "Type", "◀ Antes": "◀ Earlier", "Después ▶": "Later ▶", "Quitar": "Remove", "Aplicar tema": "Apply theme", "Foto o GIF": "Photo or GIF", "Cambiar…": "Change…", "Elegir…": "Choose…", "Ajuste": "Fit", "Llenar la tarjeta (recorta)": "Fill the card (crops)", "Entera (sin recortar)": "Whole (no crop)", "PNG, JPG, WEBP o GIF animado, hasta 15 MB. El título solo se ve si escribes uno.": "PNG, JPG, WEBP or animated GIF, up to 15 MB. The title only shows if you type one.", "La imagen ocupa más de 15 MB": "The image is larger than 15 MB", "Subiendo imagen…": "Uploading image…", "No se pudo subir: ": "Could not upload: ", "Pasar solas": "Change automatically", "Fija: ": "Fixed: ", "¿Copiar el diseño del móvil al Nest Hub? Se sustituye el diseño actual del Nest Hub.": "Copy the phone layout to the Nest Hub? The current Nest Hub layout will be replaced.", "¿Volver al diseño original? Perderás tus cambios.": "Go back to the original layout? You will lose your changes.", "Página ": "Page ", "Sin conexión con el agente": "No connection to the agent", "No encuentro el agente. ¿Está abierto?": "Can't find the agent. Is it running?", "Sin GPU": "No GPU", "Sin sensores": "No sensors", "máx ": "max ", " núcleos": " cores", " ventiladores": " fans", "Sin batería": "No battery", " · cargando": " · charging", "Elige una foto o un GIF": "Choose a photo or GIF", "Mi PC": "My PC", " widget(s) no caben en esta página. Añade filas o columnas, o hazlos más pequeños.": " widget(s) don't fit on this page. Add rows or columns, or make them smaller.", " widget(s) no caben en esta página.": " widget(s) don't fit on this page.", "Widget · ": "Widget · ", "Idioma": "Language", "Guardado": "Saved"};
+let LANG="es";
+function L(t){return LANG==="en"&&EN_T[t]!=null?EN_T[t]:t}
+// Textos fijos del HTML: se guardan en espanol y se traducen al cambiar de idioma.
+const ORIG=new WeakMap();
+function traducirFijos(){
+  const din=["pantalla","paginas","ajustesPag","ajustesWidget","paleta","colores","temas","hFija","estado"];
+  const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+  while((n=w.nextNode())){
+    let p=n.parentNode,saltar=false;while(p&&p!==document.body){if(p.tagName==="SCRIPT"||din.includes(p.id)){saltar=true;break}p=p.parentNode}
+    if(saltar)continue;
+    if(!ORIG.has(n))ORIG.set(n,n.nodeValue);
+    const o=ORIG.get(n),t=o.trim();if(!t)continue;
+    let tr=LANG==="en"?(EN_T[t]??EN_T[t+" "]??EN_T[" "+t]):null;
+    n.nodeValue=tr!=null?o.replace(t,tr.trim()):o;
+  }
+  document.title=L("PulsePC · Personalizar");document.documentElement.lang=LANG;
+}
+const NOMBRES = {cpu:"CPU",ram:L("Memoria"),gpu:"GPU",temps:L("Temperaturas"),red:L("Red"),disco:L("Discos"),
+  nucleos:L("Núcleos"),gpu_detalle:L("GPU detalle"),ventiladores:L("Ventiladores"),reloj:L("Reloj"),
+  procesos:L("Procesos"),bateria:L("Batería"),multimedia:L("Multimedia"),grafica:L("Gráfica"),imagen:L("Imagen / GIF")};
+const METRICAS = {cpu:"CPU",gpu:"GPU",ram:L("Memoria"),temp_cpu:L("Temperatura CPU"),temp_gpu:L("Temperatura GPU"),red:L("Red (bajada)")};
+const ETQ_COLOR = {fondo:L("Fondo"),tarjeta:L("Tarjetas"),acento:L("Acento"),secundario:L("Secundario"),texto:L("Texto")};
 const TEMAS = [
   {fondo:"#0E1116",tarjeta:"#171B22",acento:"#3EC7A0",secundario:"#5B9BF0",texto:"#E6E6E6"},
   {fondo:"#000000",tarjeta:"#111111",acento:"#FF4D4D",secundario:"#FFB020",texto:"#F2F2F2"},
@@ -132,22 +151,26 @@ const $=id=>document.getElementById(id);
 
 function estado(t,c){const e=$("estado");e.textContent=t;e.className=c||""}
 
+async function cargarIdioma(){
+  try{const j=await (await fetch("/ajustes")).json();LANG=j.idioma==="en"?"en":"es"}catch(e){}
+  $("idioma").value=LANG;traducirFijos();
+}
 async function cargar(){
   document.body.classList.toggle("hub",DEST==="pantalla");
   $("dMovil").className=DEST==="movil"?"sel":"";$("dHub").className=DEST==="pantalla"?"sel":"";
   const r=await fetch("/config?destino="+DEST);const j=await r.json();
-  D=j.diseno;defecto=j.por_defecto;tipos=j.tipos;pag=0;selW=-1;pintar();estado("Conectado al agente","ok");
+  D=j.diseno;defecto=j.por_defecto;tipos=j.tipos;pag=0;selW=-1;pintar();estado(L("Conectado al agente"),"ok");
 }
 function guardar(){
-  estado("Guardando…");clearTimeout(temporizador);
+  estado(L("Guardando…"));clearTimeout(temporizador);
   const dest=DEST,d=D;
   temporizador=setTimeout(async()=>{
     try{
       const r=await fetch("/config?destino="+dest,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});
       const j=await r.json();
       if(!r.ok)throw new Error(j.error||r.status);
-      d.version=j.diseno.version;estado(dest==="pantalla"?"Guardado · el Nest Hub ya lo muestra":"Guardado · el móvil ya lo muestra","ok");
-    }catch(e){estado("No se pudo guardar: "+e.message,"err")}
+      d.version=j.diseno.version;estado(dest==="pantalla"?L("Guardado · el Nest Hub ya lo muestra"):L("Guardado · el móvil ya lo muestra"),"ok");
+    }catch(e){estado(L("No se pudo guardar: ")+e.message,"err")}
   },300);
 }
 function cambio(){pintar();guardar()}
@@ -171,19 +194,19 @@ function valor(t,w){
   switch(t){
     case"cpu":return[f(s.cpu.uso)+" %"+(s.cpu.temp!=null?" · "+f(s.cpu.temp)+" °C":""),s.cpu.uso];
     case"ram":return[f(s.ram.usada_gb,1)+" / "+f(s.ram.total_gb,0)+" GB",s.ram.porcentaje];
-    case"gpu":return g?[f(g.uso)+" % · "+f(g.temp)+" °C",g.uso]:["Sin GPU",null];
-    case"gpu_detalle":return g?[f(g.reloj_mhz)+" MHz · "+f(g.consumo_w)+" W",null]:["Sin GPU",null];
-    case"temps":{const t=s.temperaturas||[];if(!t.length)return["Sin sensores",null];const m=Math.max(...t.map(x=>x.valor));return["máx "+f(m)+" °C",m]}
+    case"gpu":return g?[f(g.uso)+" % · "+f(g.temp)+" °C",g.uso]:[L("Sin GPU"),null];
+    case"gpu_detalle":return g?[f(g.reloj_mhz)+" MHz · "+f(g.consumo_w)+" W",null]:[L("Sin GPU"),null];
+    case"temps":{const t=s.temperaturas||[];if(!t.length)return[L("Sin sensores"),null];const m=Math.max(...t.map(x=>x.valor));return[L("máx ")+f(m)+" °C",m]}
     case"red":return["↓ "+f(s.red.bajada_kbs)+"  ↑ "+f(s.red.subida_kbs)+" KB/s",null];
     case"disco":return["L "+f(s.disco.lectura_kbs)+"  E "+f(s.disco.escritura_kbs)+" KB/s",null];
-    case"nucleos":return[(s.cpu.nucleos||[]).length+" núcleos",null];
-    case"ventiladores":return[(s.ventiladores||[]).length+" ventiladores",null];
+    case"nucleos":return[(s.cpu.nucleos||[]).length+L(" núcleos"),null];
+    case"ventiladores":return[(s.ventiladores||[]).length+L(" ventiladores"),null];
     case"reloj":return[new Date().toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"}),null];
     case"grafica":{const m=(w&&w.metrica)||"cpu";const mp={cpu:[s.cpu.uso,"%"],gpu:[g&&g.uso,"%"],ram:[s.ram.porcentaje,"%"],temp_cpu:[s.cpu.temp,"°C"],temp_gpu:[g&&g.temp,"°C"],red:[s.red.bajada_kbs,"KB/s"]}[m];return[METRICAS[m]+" "+f(mp[0])+" "+mp[1],null]}
-    case"procesos":{const p=s.procesos||[];return[p.length?p[0].nombre+" "+f(p[0].cpu,1)+" %":"Procesos",null]}
-    case"bateria":return s.bateria?[s.bateria.porcentaje+" %"+(s.bateria.cargando?" · cargando":""),s.bateria.porcentaje]:["Sin batería",null];
+    case"procesos":{const p=s.procesos||[];return[p.length?p[0].nombre+" "+f(p[0].cpu,1)+" %":L("Procesos"),null]}
+    case"bateria":return s.bateria?[s.bateria.porcentaje+" %"+(s.bateria.cargando?L(" · cargando"):""),s.bateria.porcentaje]:[L("Sin batería"),null];
     case"multimedia":{const m=s.medios||{};return[m.titulo?m.titulo:"⏮  ⏯  ⏭",null]}
-    case"imagen":return[w&&w.imagen?"":"Elige una foto o un GIF",null];
+    case"imagen":return[w&&w.imagen?"":L("Elige una foto o un GIF"),null];
   }return["",null];
 }
 
@@ -199,27 +222,27 @@ function pintar(){
     d.onclick=()=>{pag=i;selW=-1;pintar()};$("paginas").appendChild(d);
   });
   // ajustes de página
-  $("ajustesPag").innerHTML=`<h2>Página actual</h2>
-    <label>Nombre <input type="text" id="pNombre" style="width:130px" value="${esc(p.nombre)}"></label>
-    <label>Columnas <input type="number" id="pCols" min="1" max="4" value="${p.columnas}"></label>
-    <label>Filas <input type="number" id="pFilas" min="1" max="4" value="${p.filas}"></label>
-    <div class="fila"><button id="pIzq" title="Mover antes">◀</button><button id="pDer" title="Mover después">▶</button>
-    <button class="peligro" id="pBorrar">Borrar página</button></div>`;
+  $("ajustesPag").innerHTML=`<h2>${L("Página actual")}</h2>
+    <label>${L("Nombre")} <input type="text" id="pNombre" style="width:130px" value="${esc(p.nombre)}"></label>
+    <label>${L("Columnas")} <input type="number" id="pCols" min="1" max="4" value="${p.columnas}"></label>
+    <label>${L("Filas")} <input type="number" id="pFilas" min="1" max="4" value="${p.filas}"></label>
+    <div class="fila"><button id="pIzq" title=L("Mover antes")>◀</button><button id="pDer" title=L("Mover después")>▶</button>
+    <button class="peligro" id="pBorrar">${L("Borrar página")}</button></div>`;
   $("pNombre").oninput=e=>{p.nombre=e.target.value;guardar();pintarListaSolo()};
   $("pCols").onchange=e=>{p.columnas=lim(e.target.value,1,4);cambio()};
   $("pFilas").onchange=e=>{p.filas=lim(e.target.value,1,4);cambio()};
   $("pIzq").onclick=()=>moverPag(-1);$("pDer").onclick=()=>moverPag(1);
-  $("pBorrar").onclick=()=>{if(D.paginas.length<2)return alert("Tiene que quedar al menos una página");
+  $("pBorrar").onclick=()=>{if(D.paginas.length<2)return alert(L("Tiene que quedar al menos una página"));
     if(D.pagina_fija===pag)D.pagina_fija=-1;else if(D.pagina_fija>pag)D.pagina_fija--;
     D.paginas.splice(pag,1);pag=Math.max(0,pag-1);selW=-1;cambio()};
   // paleta
   $("paleta").innerHTML="";
-  tipos.forEach(t=>{const b=document.createElement("button");b.textContent="+ "+NOMBRES[t];
+  tipos.forEach(t=>{const b=document.createElement("button");b.textContent="+ "+L(NOMBRES[t]);
     b.onclick=()=>{p.widgets.push({tipo:t,ancho:1,alto:1,titulo:""});selW=p.widgets.length-1;cambio();
       if(t==="imagen"&&$("wImgF"))$("wImgF").click()};$("paleta").appendChild(b)});
   // pantalla
   const pan=$("pantalla");pan.style.background=T.fondo;pan.style.color=T.texto;pan.innerHTML="";
-  if(D.cabecera){const c=document.createElement("div");c.className="cab";c.innerHTML=`<i></i><b>${esc(stats.equipo||"Mi PC")}</b><span style="margin-left:auto;opacity:.6">USB · ${esc(stats.so||"Windows")}</span>`;pan.appendChild(c)}
+  if(D.cabecera){const c=document.createElement("div");c.className="cab";c.innerHTML=`<i></i><b>${esc(stats.equipo||L("Mi PC"))}</b><span style="margin-left:auto;opacity:.6">USB · ${esc(stats.so||"Windows")}</span>`;pan.appendChild(c)}
   const rj=document.createElement("div");rj.className="rejilla";
   rj.style.gridTemplateColumns=`repeat(${p.columnas},1fr)`;rj.style.gridTemplateRows=`repeat(${p.filas},1fr)`;
   const pos=colocar(p);let fuera=0;
@@ -228,7 +251,7 @@ function pintar(){
     const el=document.createElement("div");el.className="w"+(o.i===selW?" sel":"");el.style.background=T.tarjeta;
     el.style.gridColumn=`${o.c+1} / span ${o.an}`;el.style.gridRow=`${o.f+1} / span ${o.al}`;
     const[v,pc]=valor(w.tipo,w);
-    el.innerHTML=`<div class="t">${esc(w.titulo||NOMBRES[w.tipo])}</div><div class="v">${esc(v)}</div>`+(pc!=null?`<div class="b"><i style="width:${Math.min(100,pc)}%"></i></div>`:"");
+    el.innerHTML=`<div class="t">${esc(w.titulo||L(NOMBRES[w.tipo]))}</div><div class="v">${esc(v)}</div>`+(pc!=null?`<div class="b"><i style="width:${Math.min(100,pc)}%"></i></div>`:"");
     if(w.tipo==="imagen"&&w.imagen){el.style.backgroundImage=`url(/imagen?id=${encodeURIComponent(w.imagen)})`;
       el.style.backgroundSize=w.ajuste==="contener"?"contain":"cover";el.style.backgroundPosition="center";el.style.backgroundRepeat="no-repeat";
       if(!w.titulo)el.querySelector(".t").style.visibility="hidden"}
@@ -245,20 +268,20 @@ function pintar(){
   pan.appendChild(rj);
   // ajustes del widget
   const aw=$("ajustesWidget");
-  if(selW<0||!p.widgets[selW]){aw.innerHTML=`<h2>Widget</h2><p class="vacio">Haz clic en un widget de la vista previa para editarlo.</p>`+(fuera?`<p class="aviso">${fuera} widget(s) no caben en esta página. Añade filas o columnas, o hazlos más pequeños.</p>`:"")}
+  if(selW<0||!p.widgets[selW]){aw.innerHTML=`<h2>${L("Widget")}</h2><p class="vacio">${L("Haz clic en un widget de la vista previa para editarlo.")}</p>`+(fuera?`<p class="aviso">${fuera}${L(" widget(s) no caben en esta página. Añade filas o columnas, o hazlos más pequeños.")}</p>`:"")}
   else{const w=p.widgets[selW];
-    aw.innerHTML=`<h2>Widget · ${NOMBRES[w.tipo]}</h2>
-      <label>Título <input type="text" id="wTit" style="width:150px" placeholder="${NOMBRES[w.tipo]}" value="${esc(w.titulo||"")}"></label>
-      <label>Ancho (columnas) <input type="number" id="wAn" min="1" max="${p.columnas}" value="${w.ancho}"></label>
-      <label>Alto (filas) <input type="number" id="wAl" min="1" max="${p.filas}" value="${w.alto}"></label>
-      ${w.tipo==="imagen"?`<label>Foto o GIF <button id="wImg">${w.imagen?"Cambiar…":"Elegir…"}</button></label>
+    aw.innerHTML=`<h2>Widget · ${L(NOMBRES[w.tipo])}</h2>
+      <label>${L("Título")} <input type="text" id="wTit" style="width:150px" placeholder="${L(NOMBRES[w.tipo])}" value="${esc(w.titulo||"")}"></label>
+      <label>${L("Ancho (columnas)")} <input type="number" id="wAn" min="1" max="${p.columnas}" value="${w.ancho}"></label>
+      <label>${L("Alto (filas)")} <input type="number" id="wAl" min="1" max="${p.filas}" value="${w.alto}"></label>
+      ${w.tipo==="imagen"?`<label>${L("Foto o GIF")} <button id="wImg">${w.imagen?L("Cambiar…"):L("Elegir…")}</button></label>
         <input type="file" id="wImgF" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
-        <label>Ajuste <select id="wAj"><option value="cubrir"${w.ajuste!=="contener"?" selected":""}>Llenar la tarjeta (recorta)</option><option value="contener"${w.ajuste==="contener"?" selected":""}>Entera (sin recortar)</option></select></label>
-        <p class="vacio" style="font-size:12px;margin:4px 0">PNG, JPG, WEBP o GIF animado, hasta 15 MB. El título solo se ve si escribes uno.</p>`:""}
-      ${w.tipo==="grafica"?`<label>Qué muestra <select id="wMet">${Object.keys(METRICAS).map(m=>`<option value="${m}"${m===(w.metrica||"cpu")?" selected":""}>${METRICAS[m]}</option>`).join("")}</select></label>`:""}
-      <label>Tipo <select id="wTipo">${tipos.map(t=>`<option value="${t}"${t===w.tipo?" selected":""}>${NOMBRES[t]}</option>`).join("")}</select></label>
-      <div class="fila"><button id="wAnt">◀ Antes</button><button id="wDes">Después ▶</button><button class="peligro" id="wBorrar">Quitar</button></div>
-      ${fuera?`<p class="aviso">${fuera} widget(s) no caben en esta página.</p>`:""}`;
+        <label>${L("Ajuste")} <select id="wAj"><option value="cubrir"${w.ajuste!=="contener"?" selected":""}>${L("Llenar la tarjeta (recorta)")}</option><option value="contener"${w.ajuste==="contener"?" selected":""}>${L("Entera (sin recortar)")}</option></select></label>
+        <p class="vacio" style="font-size:12px;margin:4px 0">${L("PNG, JPG, WEBP o GIF animado, hasta 15 MB. El título solo se ve si escribes uno.")}</p>`:""}
+      ${w.tipo==="grafica"?`<label>${L("Qué muestra")} <select id="wMet">${Object.keys(METRICAS).map(m=>`<option value="${m}"${m===(w.metrica||"cpu")?" selected":""}>${L(METRICAS[m])}</option>`).join("")}</select></label>`:""}
+      <label>${L("Tipo")} <select id="wTipo">${tipos.map(t=>`<option value="${t}"${t===w.tipo?" selected":""}>${L(NOMBRES[t])}</option>`).join("")}</select></label>
+      <div class="fila"><button id="wAnt">${L("◀ Antes")}</button><button id="wDes">${L("Después ▶")}</button><button class="peligro" id="wBorrar">${L("Quitar")}</button></div>
+      ${fuera?`<p class="aviso">${fuera}${L(" widget(s) no caben en esta página.")}</p>`:""}`;
     $("wTit").oninput=e=>{w.titulo=e.target.value;guardar();};
     $("wTit").onchange=()=>pintar();
     $("wAn").onchange=e=>{w.ancho=lim(e.target.value,1,p.columnas);cambio()};
@@ -268,25 +291,25 @@ function pintar(){
     if($("wImg")){$("wImg").onclick=()=>$("wImgF").click();
       $("wAj").onchange=e=>{w.ajuste=e.target.value;cambio()};
       $("wImgF").onchange=async e=>{const f=e.target.files[0];if(!f)return;
-        if(f.size>15*1048576){estado("La imagen ocupa más de 15 MB","err");return}
-        estado("Subiendo imagen…");
+        if(f.size>15*1048576){estado(L("La imagen ocupa más de 15 MB"),"err");return}
+        estado(L("Subiendo imagen…"));
         try{const r=await fetch("/imagen",{method:"POST",headers:{"Content-Type":f.type||"application/octet-stream"},body:f});
           const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);w.imagen=j.id;cambio()}
-        catch(err){estado("No se pudo subir: "+err.message,"err")}}}
+        catch(err){estado(L("No se pudo subir: ")+err.message,"err")}}}
     $("wAnt").onclick=()=>moverW(-1);$("wDes").onclick=()=>moverW(1);
     $("wBorrar").onclick=()=>{p.widgets.splice(selW,1);selW=-1;cambio()};
   }
   // colores
   $("temas").innerHTML="";
-  TEMAS.forEach(t=>{const b=document.createElement("button");b.title="Aplicar tema";
+  TEMAS.forEach(t=>{const b=document.createElement("button");b.title=L("Aplicar tema");
     b.innerHTML=`<i style="background:${t.fondo}"></i><i style="background:${t.tarjeta}"></i><i style="background:${t.acento}"></i><i style="background:${t.secundario}"></i>`;
     b.onclick=()=>{D.tema={...t};cambio()};$("temas").appendChild(b)});
-  $("colores").innerHTML=Object.keys(ETQ_COLOR).map(k=>`<label>${ETQ_COLOR[k]} <input type="color" data-k="${k}" value="${T[k]}"></label>`).join("");
+  $("colores").innerHTML=Object.keys(ETQ_COLOR).map(k=>`<label>${L(ETQ_COLOR[k])} <input type="color" data-k="${k}" value="${T[k]}"></label>`).join("");
   $("colores").querySelectorAll("input").forEach(i=>i.oninput=e=>{D.tema[e.target.dataset.k]=e.target.value.toUpperCase();pintarPantallaRapido();guardar()});
   $("cabecera").checked=!!D.cabecera;
   if(DEST==="pantalla"){
     const fj=D.pagina_fija==null?-1:D.pagina_fija;
-    $("hFija").innerHTML=`<option value="-1">Pasar solas</option>`+D.paginas.map((pg,i)=>`<option value="${i}"${i===fj?" selected":""}>Fija: ${esc(pg.nombre)}</option>`).join("");
+    $("hFija").innerHTML=`<option value="-1">${L("Pasar solas")}</option>`+D.paginas.map((pg,i)=>`<option value="${i}"${i===fj?" selected":""}>${L("Fija: ")}${esc(pg.nombre)}</option>`).join("");
     $("hFija").value=String(fj);
     if(document.activeElement!==$("hSeg"))$("hSeg").value=D.segundos||15;
     $("hSegL").style.display=fj<0?"flex":"none";
@@ -302,25 +325,28 @@ function moverW(d){const p=D.paginas[pag],j=selW+d;if(j<0||j>=p.widgets.length)r
 function lim(v,a,b){v=parseInt(v,10);return isNaN(v)?a:Math.max(a,Math.min(b,v))}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
-$("nuevaPag").onclick=()=>{D.paginas.push({nombre:"Página "+(D.paginas.length+1),columnas:3,filas:2,widgets:[]});pag=D.paginas.length-1;selW=-1;cambio()};
+$("nuevaPag").onclick=()=>{D.paginas.push({nombre:L("Página ")+(D.paginas.length+1),columnas:3,filas:2,widgets:[]});pag=D.paginas.length-1;selW=-1;cambio()};
 $("hFija").onchange=e=>{D.pagina_fija=parseInt(e.target.value,10);if(D.pagina_fija>=0){pag=D.pagina_fija;selW=-1}cambio()};
 $("hSeg").onchange=e=>{D.segundos=lim(e.target.value,5,600);cambio()};
-$("hCopiar").onclick=async()=>{if(!confirm("¿Copiar el diseño del móvil al Nest Hub? Se sustituye el diseño actual del Nest Hub."))return;
+$("hCopiar").onclick=async()=>{if(!confirm(L("¿Copiar el diseño del móvil al Nest Hub? Se sustituye el diseño actual del Nest Hub.")))return;
   const j=await (await fetch("/config?destino=movil")).json();const fj=D.pagina_fija,sg=D.segundos;
   D=JSON.parse(JSON.stringify(j.diseno));D.pagina_fija=-1;D.segundos=sg||15;pag=0;selW=-1;cambio()};
 function irA(d){if(d===DEST)return;DEST=d;history.replaceState(null,"",d==="pantalla"?"#pantalla":"#");cargar()}
 $("dMovil").onclick=()=>irA("movil");$("dHub").onclick=()=>irA("pantalla");
 $("cabecera").onchange=e=>{D.cabecera=e.target.checked;cambio()};
 $("alerta").onchange=e=>{D.alerta_temp=lim(e.target.value,50,110);cambio()};
-$("restaurar").onclick=()=>{if(confirm("¿Volver al diseño original? Perderás tus cambios.")){D=JSON.parse(JSON.stringify(defecto));pag=0;selW=-1;cambio()}};
+$("restaurar").onclick=()=>{if(confirm(L("¿Volver al diseño original? Perderás tus cambios."))){D=JSON.parse(JSON.stringify(defecto));pag=0;selW=-1;cambio()}};
 
 // Datos en directo para la vista previa
 async function refrescar(){
   try{const r=await fetch("/stats");stats=await r.json();
     if(D&&!arrastre&&document.activeElement.tagName!=="INPUT"&&document.activeElement.tagName!=="SELECT")pintar();
-  }catch(e){estado("Sin conexión con el agente","err")}
+  }catch(e){estado(L("Sin conexión con el agente"),"err")}
 }
-cargar().then(()=>{refrescar();setInterval(refrescar,2000)}).catch(()=>estado("No encuentro el agente. ¿Está abierto?","err"));
+$("idioma").onchange=async e=>{LANG=e.target.value;traducirFijos();if(D)pintar();
+  try{const r=await fetch("/ajustes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idioma:LANG})});
+    if(!r.ok)throw new Error(r.status);estado(L("Guardado"),"ok")}catch(err){estado(L("No se pudo guardar: ")+err.message,"err")}};
+cargarIdioma().then(cargar).then(()=>{refrescar();setInterval(refrescar,2000)}).catch(()=>estado(L("No encuentro el agente. ¿Está abierto?"),"err"));
 </script>
 </body>
 </html>

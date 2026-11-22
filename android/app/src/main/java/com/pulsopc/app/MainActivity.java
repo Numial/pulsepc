@@ -181,11 +181,11 @@ public class MainActivity extends Activity {
                 panel.setConexion(HOST_USB.equals(via) ? "USB" : "Wi-Fi " + via.split(":")[0]);
                 publicar(j, null);
             } else if (j != null) {
-                publicar(null, "Conectado, esperando datos...");
+                publicar(null, T.t("Conectado, esperando datos...", "Connected, waiting for data..."));
             } else if (h == null) {
-                publicar(null, "Buscando el PC (Wi-Fi o cable USB)...\nMantén pulsado para escribir la IP.");
+                publicar(null, T.t("Buscando el PC (Wi-Fi o cable USB)...\nMantén pulsado para escribir la IP.", "Looking for the PC (Wi-Fi or USB cable)...\nLong-press to type the IP."));
             } else {
-                publicar(null, "Sin respuesta de " + h + " ni por USB\nMantén pulsado para cambiar la IP.");
+                publicar(null, T.t("Sin respuesta de ", "No answer from ") + h + T.t(" ni por USB\nMantén pulsado para cambiar la IP.", " or over USB\nLong-press to change the IP."));
             }
 
             long espera = INTERVALO_MS - (System.currentTimeMillis() - t0);
@@ -352,10 +352,10 @@ public class MainActivity extends Activity {
         campo.setHint("192.168.1.20:" + PUERTO_HTTP);
         if (host != null) campo.setText(host);
         new AlertDialog.Builder(this)
-                .setTitle("IP del PC")
-                .setMessage("La ves en la ventana del agente al arrancarlo. Por cable USB no hace falta.")
+                .setTitle(T.t("IP del PC", "PC's IP address"))
+                .setMessage(T.t("La ves en la ventana del agente al arrancarlo. Por cable USB no hace falta.", "You can see it in the agent window when it starts. Not needed over USB."))
                 .setView(campo)
-                .setPositiveButton("Guardar", new DialogInterface.OnClickListener() {
+                .setPositiveButton(T.t("Guardar", "Save"), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
                         String v = campo.getText().toString().trim();
                         if (v.startsWith("http://")) v = v.substring(7);
@@ -364,10 +364,10 @@ public class MainActivity extends Activity {
                         if (!v.contains(":")) v = v + ":" + PUERTO_HTTP;
                         host = v;
                         prefs.edit().putString("host", v).apply();
-                        Toast.makeText(MainActivity.this, "Conectando a " + v, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, T.t("Conectando a ", "Connecting to ") + v, Toast.LENGTH_SHORT).show();
                     }
                 })
-                .setNegativeButton("Cancelar", null)
+                .setNegativeButton(T.t("Cancelar", "Cancel"), null)
                 .setOnDismissListener(new DialogInterface.OnDismissListener() {
                     @Override public void onDismiss(DialogInterface d) { ocultarBarras(); }
                 })

@@ -48,7 +48,7 @@ public class PanelView extends View {
     private final Path ruta = new Path();
 
     private JSONObject s;
-    private String aviso = "Iniciando...";
+    private String aviso = T.t("Iniciando...", "Starting...");
     private long ultimaRespuesta;
 
     private final float[] histCpu = new float[N], histGpu = new float[N];
@@ -173,6 +173,8 @@ public class PanelView extends View {
         histRam[cabeza] = ram != null ? (float) ram.optDouble("porcentaje", 0) : 0;
         histTempCpu[cabeza] = cpu != null && !cpu.isNull("temp") ? (float) cpu.optDouble("temp", 0) : 0;
         histTempGpu[cabeza] = gpu != null ? (float) gpu.optDouble("temp", 0) : 0;
+        String idioma = datos.optString("idioma", "");
+        if (!idioma.isEmpty()) T.en = "en".equals(idioma);
         JSONObject d = datos.optJSONObject("diseno");
         if (d != null && d.optLong("version", 0) != versionDiseno) {
             versionDiseno = d.optLong("version", 0);
@@ -222,7 +224,7 @@ public class PanelView extends View {
             long t = System.currentTimeMillis() / 30000;
             float px = w * (0.3f + 0.4f * ((t * 37) % 10) / 10f);
             float py = h * (0.3f + 0.4f * ((t * 53) % 10) / 10f);
-            c.drawText("PulsePC · esperando al PC", px, py, pTexto);
+            c.drawText(T.t("PulsePC · esperando al PC", "PulsePC · waiting for the PC"), px, py, pTexto);
             return;
         }
 
@@ -347,7 +349,7 @@ public class PanelView extends View {
             postInvalidateDelayed(66);   // siguiente fotograma (~15 por segundo)
         }
         if (bmp == null) {
-            String t = id.isEmpty() ? "Elige una foto en el editor" : "Cargando imagen...";
+            String t = id.isEmpty() ? T.t("Elige una foto en el editor", "Choose a photo in the editor") : T.t("Cargando imagen...", "Loading image...");
             pTexto.setColor(TENUE);
             pTexto.setTextSize(12 * dp);
             pTexto.setTextAlign(Paint.Align.CENTER);
@@ -415,10 +417,10 @@ public class PanelView extends View {
     }
 
     private void tarjetaProcesos(Canvas c, float x, float y, float w, float h) {
-        titulo(c, "Procesos", x, y, w);
+        titulo(c, T.t("Procesos", "Processes"), x, y, w);
         JSONArray p = s.optJSONArray("procesos");
         if (p == null || p.length() == 0) {
-            textoCentrado(c, "Calculando...", x, y + h / 2, w);
+            textoCentrado(c, T.t("Calculando...", "Calculating..."), x, y + h / 2, w);
             return;
         }
         float fila = Math.max(22 * dp, Math.min(30 * dp, (h - 22 * dp) / Math.max(1, p.length())));
@@ -443,10 +445,10 @@ public class PanelView extends View {
     }
 
     private void tarjetaBateria(Canvas c, float x, float y, float w, float h) {
-        titulo(c, "Batería", x, y, w);
+        titulo(c, T.t("Batería", "Battery"), x, y, w);
         JSONObject b = s.optJSONObject("bateria");
         if (b == null) {
-            textoCentrado(c, "Este PC no tiene batería", x, y + h / 2, w);
+            textoCentrado(c, T.t("Este PC no tiene batería", "This PC has no battery"), x, y + h / 2, w);
             return;
         }
         int pct = b.optInt("porcentaje", 0);
@@ -471,11 +473,11 @@ public class PanelView extends View {
         pTexto.setTextSize(bh * 0.45f);
         c.drawText(pct + "%", bx + bw / 2, by + bh / 2 + bh * 0.16f, pTexto);
         String estado;
-        if (cargando) estado = pct >= 100 ? "Cargada · enchufada" : "Cargando";
+        if (cargando) estado = pct >= 100 ? T.t("Cargada · enchufada", "Charged · plugged in") : T.t("Cargando", "Charging");
         else if (!b.isNull("minutos")) {
             int min = b.optInt("minutos", 0);
-            estado = (min / 60) + " h " + (min % 60) + " min restantes";
-        } else estado = "Con batería";
+            estado = (min / 60) + " h " + (min % 60) + T.t(" min restantes", " min left");
+        } else estado = T.t("Con batería", "On battery");
         pTexto.setColor(TENUE);
         pTexto.setTextSize(12 * dp);
         c.drawText(encajar(estado, w), x + w / 2, by + bh + 20 * dp, pTexto);
@@ -603,10 +605,10 @@ public class PanelView extends View {
         int color = ACENTO;
         switch (m) {
             case "gpu": nombre = "GPU"; hist = histGpu; max = 100; valor = Math.round(hist[cabeza]) + " %"; color = SECUNDARIO; break;
-            case "ram": nombre = "Memoria"; hist = histRam; max = 100; valor = Math.round(hist[cabeza]) + " %"; break;
-            case "temp_cpu": nombre = "Temperatura CPU"; hist = histTempCpu; max = 100; valor = Math.round(hist[cabeza]) + " °C"; color = colorPorNivel(hist[cabeza], 75, alertaTemp); break;
-            case "temp_gpu": nombre = "Temperatura GPU"; hist = histTempGpu; max = 100; valor = Math.round(hist[cabeza]) + " °C"; color = colorPorNivel(hist[cabeza], 75, alertaTemp); break;
-            case "red": nombre = "Red (bajada)"; hist = histBajada; max = 0; valor = velocidad(hist[cabeza]); break;
+            case "ram": nombre = T.t("Memoria", "Memory"); hist = histRam; max = 100; valor = Math.round(hist[cabeza]) + " %"; break;
+            case "temp_cpu": nombre = T.t("Temperatura CPU", "CPU temperature"); hist = histTempCpu; max = 100; valor = Math.round(hist[cabeza]) + " °C"; color = colorPorNivel(hist[cabeza], 75, alertaTemp); break;
+            case "temp_gpu": nombre = T.t("Temperatura GPU", "GPU temperature"); hist = histTempGpu; max = 100; valor = Math.round(hist[cabeza]) + " °C"; color = colorPorNivel(hist[cabeza], 75, alertaTemp); break;
+            case "red": nombre = T.t("Red (bajada)", "Network (download)"); hist = histBajada; max = 0; valor = velocidad(hist[cabeza]); break;
             default: nombre = "CPU"; hist = histCpu; max = 100; valor = Math.round(hist[cabeza]) + " %";
         }
         // Titulo y valor en la misma linea si caben; si no (tarjeta estrecha), el valor baja
@@ -641,7 +643,7 @@ public class PanelView extends View {
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setColor(TENUE);
         pTexto.setTextSize(10 * dp);
-        c.drawText("últimos 60 s", x, y + h, pTexto);
+        c.drawText(T.t("últimos 60 s", "last 60 s"), x, y + h, pTexto);
     }
 
     @Override
@@ -667,10 +669,10 @@ public class PanelView extends View {
     }
 
     private void tarjetaReloj(Canvas c, float x, float y, float w, float h) {
-        titulo(c, "Reloj", x, y, w);
+        titulo(c, T.t("Reloj", "Clock"), x, y, w);
         java.util.Date ahora = new java.util.Date();
         String hora = new java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora);
-        String fecha = new java.text.SimpleDateFormat("EEEE d MMMM", new Locale("es", "ES")).format(ahora);
+        String fecha = new java.text.SimpleDateFormat(T.en ? "EEEE, MMMM d" : "EEEE d MMMM", T.locale()).format(ahora);
         pTexto.setTextAlign(Paint.Align.CENTER);
         pTexto.setColor(TEXTO);
         float tam = Math.min(h * 0.5f, w / 2.6f);
@@ -703,8 +705,8 @@ public class PanelView extends View {
             pTexto.setColor(TENUE);
             pTexto.setTextSize(12 * dp);
             String extra = (conexion.isEmpty() ? "" : conexion + "  ·  ") + s.optString("so", "")
-                    + "  ·  encendido " + duracion(s.optDouble("uptime_s", 0));
-            if (!ok) extra = "sin conexión  ·  " + extra;
+                    + T.t("  ·  encendido ", "  ·  up ") + duracion(s.optDouble("uptime_s", 0));
+            if (!ok) extra = T.t("sin conexión  ·  ", "offline  ·  ") + extra;
             c.drawText(encajar(extra, x + w - finEquipo - 12 * dp), x + w, y + h / 2 + 5 * dp, pTexto);
         }
     }
@@ -800,7 +802,7 @@ public class PanelView extends View {
     private void tarjetaRam(Canvas c, float x, float y, float w, float h) {
         JSONObject ram = s.optJSONObject("ram");
         if (ram == null) return;
-        titulo(c, "Memoria", x, y, w);
+        titulo(c, T.t("Memoria", "Memory"), x, y, w);
         float pct = (float) ram.optDouble("porcentaje", 0);
         String sub = String.format(Locale.ROOT, "%.1f / %.1f GB",
                 ram.optDouble("usada_gb", 0), ram.optDouble("total_gb", 0));
@@ -815,9 +817,9 @@ public class PanelView extends View {
             pTexto.setTextAlign(Paint.Align.CENTER);
             pTexto.setColor(TENUE);
             pTexto.setTextSize(13 * dp);
-            c.drawText(encajar("No detectada", w), x + w / 2, y + h / 2, pTexto);
+            c.drawText(encajar(T.t("No detectada", "Not detected"), w), x + w / 2, y + h / 2, pTexto);
             pTexto.setTextSize(13 * dp);
-            c.drawText(encajar("(se lee con nvidia-smi)", w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
+            c.drawText(encajar(T.t("(se lee con nvidia-smi)", "(read with nvidia-smi)"), w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
             return;
         }
         titulo(c, "GPU · " + recortar(g.optString("nombre", ""), 22), x, y, w);
@@ -837,17 +839,17 @@ public class PanelView extends View {
     }
 
     private void tarjetaTemps(Canvas c, float x, float y, float w, float h) {
-        titulo(c, "Temperaturas", x, y, w);
+        titulo(c, T.t("Temperaturas", "Temperatures"), x, y, w);
         JSONArray t = s.optJSONArray("temperaturas");
         if (t == null || t.length() == 0) {
             pTexto.setTextAlign(Paint.Align.CENTER);
             pTexto.setColor(TENUE);
             pTexto.setTextSize(13 * dp);
-            c.drawText(encajar("Sin sensores", w), x + w / 2, y + h / 2, pTexto);
+            c.drawText(encajar(T.t("Sin sensores", "No sensors"), w), x + w / 2, y + h / 2, pTexto);
             pTexto.setTextSize(13 * dp);
-            c.drawText(encajar("Abre LibreHardwareMonitor", w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
+            c.drawText(encajar(T.t("Abre LibreHardwareMonitor", "Open LibreHardwareMonitor"), w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
             pTexto.setTextSize(13 * dp);
-            c.drawText(encajar("con servidor web activado", w), x + w / 2, y + h / 2 + 34 * dp, pTexto);
+            c.drawText(encajar(T.t("con servidor web activado", "with the web server on"), w), x + w / 2, y + h / 2 + 34 * dp, pTexto);
             return;
         }
         float fila = 20 * dp;
@@ -876,7 +878,7 @@ public class PanelView extends View {
     private void tarjetaRed(Canvas c, float x, float y, float w, float h) {
         JSONObject red = s.optJSONObject("red");
         if (red == null) return;
-        titulo(c, "Red", x, y, w);
+        titulo(c, T.t("Red", "Network"), x, y, w);
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setTextSize(18 * dp);
         pTexto.setColor(ACENTO);
@@ -896,7 +898,7 @@ public class PanelView extends View {
     private void tarjetaDisco(Canvas c, float x, float y, float w, float h) {
         JSONObject d = s.optJSONObject("disco");
         if (d == null) return;
-        titulo(c, "Discos", x, y, w);
+        titulo(c, T.t("Discos", "Disks"), x, y, w);
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setTextSize(12 * dp);
         pTexto.setColor(TEXTO);
@@ -932,7 +934,7 @@ public class PanelView extends View {
     private void tarjetaNucleos(Canvas c, float x, float y, float w, float h) {
         JSONObject cpu = s.optJSONObject("cpu");
         JSONArray n = cpu != null ? cpu.optJSONArray("nucleos") : null;
-        titulo(c, "Núcleos", x, y, w);
+        titulo(c, T.t("Núcleos", "Cores"), x, y, w);
         if (n == null || n.length() == 0) return;
         int k = n.length();
         int cols = k > 8 ? 2 : 1;
@@ -980,12 +982,12 @@ public class PanelView extends View {
         if (g == null) return;
         float fila = 22 * dp, yy = y + 38 * dp;
         String[][] datos = {
-                {"Uso", num(g, "uso", "%.0f %%")},
-                {"Temperatura", num(g, "temp", "%.0f °C")},
-                {"Reloj núcleo", num(g, "reloj_mhz", "%.0f MHz")},
-                {"Reloj memoria", num(g, "reloj_mem_mhz", "%.0f MHz")},
-                {"Consumo", num(g, "consumo_w", "%.0f W") + " / " + num(g, "limite_w", "%.0f W")},
-                {"Ventilador", num(g, "ventilador", "%.0f %%")},
+                {T.t("Uso", "Usage"), num(g, "uso", "%.0f %%")},
+                {T.t("Temperatura", "Temperature"), num(g, "temp", "%.0f °C")},
+                {T.t("Reloj núcleo", "Core clock"), num(g, "reloj_mhz", "%.0f MHz")},
+                {T.t("Reloj memoria", "Memory clock"), num(g, "reloj_mem_mhz", "%.0f MHz")},
+                {T.t("Consumo", "Power"), num(g, "consumo_w", "%.0f W") + " / " + num(g, "limite_w", "%.0f W")},
+                {T.t("Ventilador", "Fan"), num(g, "ventilador", "%.0f %%")},
                 {"VRAM", String.format(Locale.ROOT, "%.0f / %.0f MB",
                         g.optDouble("vram_usada_mb", 0), g.optDouble("vram_total_mb", 0))},
         };
@@ -998,7 +1000,7 @@ public class PanelView extends View {
     }
 
     private void tarjetaVentiladores(Canvas c, float x, float y, float w, float h) {
-        titulo(c, "Ventiladores y consumo", x, y, w);
+        titulo(c, T.t("Ventiladores y consumo", "Fans and power"), x, y, w);
         float fila = 22 * dp, yy = y + 38 * dp;
         JSONArray f = s.optJSONArray("ventiladores");
         JSONArray p = s.optJSONArray("consumos");
@@ -1022,9 +1024,9 @@ public class PanelView extends View {
             pTexto.setTextAlign(Paint.Align.CENTER);
             pTexto.setColor(TENUE);
             pTexto.setTextSize(13 * dp);
-            c.drawText(encajar("Necesita LibreHardwareMonitor", w), x + w / 2, y + h / 2, pTexto);
+            c.drawText(encajar(T.t("Necesita LibreHardwareMonitor", "Needs LibreHardwareMonitor"), w), x + w / 2, y + h / 2, pTexto);
             pTexto.setTextSize(13 * dp);
-            c.drawText(encajar("con servidor web activado", w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
+            c.drawText(encajar(T.t("con servidor web activado", "with the web server on"), w), x + w / 2, y + h / 2 + 18 * dp, pTexto);
         }
     }
 
