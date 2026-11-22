@@ -96,22 +96,32 @@ function pintarGrafica(cv,m){var r=cv.getBoundingClientRect(),dpr=window.deviceP
   x.strokeStyle=col;x.lineWidth=3*dpr;x.stroke();x.lineTo(cv.width*(h.length-1)/(HMAX-1),cv.height);x.lineTo(0,cv.height);x.closePath();
   x.globalAlpha=.18;x.fillStyle=col;x.fill()}
 
+// Coloca los widgets igual que el movil y el editor: en orden, en el primer hueco donde quepan.
+function colocar(p){var ocup=[],out=[];for(var y=0;y<p.filas;y++){ocup.push([]);for(var x=0;x<p.columnas;x++)ocup[y].push(false)}
+  for(var i=0;i<p.widgets.length;i++){var w=p.widgets[i],an=Math.min(w.ancho,p.columnas),al=Math.min(w.alto,p.filas),hecho=null;
+    for(var f=0;f<=p.filas-al&&!hecho;f++)for(var c=0;c<=p.columnas-an&&!hecho;c++){var ok=true;
+      for(var yy=f;yy<f+al&&ok;yy++)for(var xx=c;xx<c+an;xx++)if(ocup[yy][xx]){ok=false;break}
+      if(ok){hecho={f:f,c:c};for(yy=f;yy<f+al;yy++)for(xx=c;xx<c+an;xx++)ocup[yy][xx]=true}}
+    out.push(hecho?{i:i,f:hecho.f,c:hecho.c,an:an,al:al}:{i:i,f:-1})}return out}
 function pintar(){
   if(!S||!D)return;var ps=D.paginas||[];if(!ps.length)return;
-  if(ps.length>1&&Date.now()-cambio>15000){pag=(pag+1)%ps.length;cambio=Date.now()}
+  var fija=D.pagina_fija!=null?D.pagina_fija:-1;
+  if(fija>=0&&fija<ps.length)pag=fija;
+  else if(ps.length>1&&Date.now()-cambio>(D.segundos||15)*1000){pag=(pag+1)%ps.length;cambio=Date.now()}
   if(pag>=ps.length)pag=0;var p=ps[pag],rj=document.getElementById("rejilla");
   rj.style.gridTemplateColumns="repeat("+p.columnas+",minmax(0,1fr))";rj.style.gridTemplateRows="repeat("+p.filas+",minmax(0,1fr))";
   var h="",grafs=[];
-  for(var i=0;i<p.widgets.length;i++){var w=p.widgets[i],f=W[w.tipo];if(!f)continue;var r;try{r=f(w)}catch(err){r={t:w.tipo,h:""}}
-    if(r.graf)grafs.push([i,r.graf]);
-    h+='<div class="w'+(r.a?' alerta':'')+'" style="grid-column:span '+w.ancho+';grid-row:span '+w.alto+'">'+
+  var pos=colocar(p),k2=0;
+  for(var q=0;q<pos.length;q++){var o=pos[q];if(o.f<0)continue;var w=p.widgets[o.i],f=W[w.tipo];if(!f)continue;var r;try{r=f(w)}catch(err){r={t:w.tipo,h:""}}
+    if(r.graf)grafs.push([k2,r.graf]);k2++;
+    h+='<div class="w'+(r.a?' alerta':'')+'" style="grid-column:'+(o.c+1)+' / span '+o.an+';grid-row:'+(o.f+1)+' / span '+o.al+'">'+
        ((w.titulo||r.t)?'<div class="t">'+e(w.titulo||r.t)+'</div>':'')+'<div class="c">'+r.h+'</div></div>'}
   rj.innerHTML=h;
   for(var j=0;j<grafs.length;j++)pintarGrafica(rj.children[grafs[j][0]].querySelector("canvas"),grafs[j][1]);
   document.getElementById("cab").style.display=D.cabecera?"flex":"none";
   document.getElementById("equipo").textContent=S.equipo||"PulsePC";
   document.getElementById("hora").textContent=new Date().toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
-  var pt="";for(var k=0;k<ps.length&&ps.length>1;k++)pt+=k==pag?"●":"○";document.getElementById("puntos").textContent=pt;
+  var pt="";for(var k=0;k<ps.length&&ps.length>1&&!(fija>=0);k++)pt+=k==pag?"●":"○";document.getElementById("puntos").textContent=pt;
 }
 function aplicarTema(){if(!D||D.version===versionD)return;versionD=D.version;var t=D.tema||{},s=document.documentElement.style;
   s.setProperty("--fondo",t.fondo);s.setProperty("--tarjeta",t.tarjeta);s.setProperty("--acento",t.acento);s.setProperty("--sec",t.secundario);s.setProperty("--texto",t.texto)}

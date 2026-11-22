@@ -460,10 +460,10 @@ def ruta_portada():
 
 
 def widget_en_uso(tipo):
-    d = diseno_actual()
-    if not d:
-        return False
-    return any(w.get("tipo") == tipo for p in d.get("paginas", []) for w in p.get("widgets", []))
+    for d in (diseno_actual(), diseno_actual("pantalla")):
+        if d and any(w.get("tipo") == tipo for p in d.get("paginas", []) for w in p.get("widgets", [])):
+            return True
+    return False
 
 
 def leer_temps_psutil():
@@ -708,10 +708,41 @@ DISENO_POR_DEFECTO = {
     ],
 }
 
+# Diseno propio para el Nest Hub (pantalla 1024x600, mas ancha que el movil y sin tacto).
+DISENO_PANTALLA_POR_DEFECTO = {
+    "version": 1,
+    "tema": dict(DISENO_POR_DEFECTO["tema"]),
+    "cabecera": True,
+    "alerta_temp": 90,
+    "pagina_fija": -1,      # -1: las paginas se pasan solas; 0, 1...: se queda fija en esa
+    "segundos": 15,         # cada cuanto se pasa de pagina si no hay una fija
+    "paginas": [
+        {"nombre": "Resumen", "columnas": 4, "filas": 2, "widgets": [
+            {"tipo": "cpu", "ancho": 1, "alto": 1},
+            {"tipo": "gpu", "ancho": 1, "alto": 1},
+            {"tipo": "ram", "ancho": 1, "alto": 1},
+            {"tipo": "reloj", "ancho": 1, "alto": 1},
+            {"tipo": "grafica", "ancho": 2, "alto": 1, "metrica": "cpu"},
+            {"tipo": "temps", "ancho": 1, "alto": 1},
+            {"tipo": "red", "ancho": 1, "alto": 1},
+        ]},
+        {"nombre": "Detalle", "columnas": 3, "filas": 1, "widgets": [
+            {"tipo": "nucleos", "ancho": 1, "alto": 1},
+            {"tipo": "gpu_detalle", "ancho": 1, "alto": 1},
+            {"tipo": "ventiladores", "ancho": 1, "alto": 1},
+        ]},
+    ],
+}
+
 RUTA_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsopc_config.json")
+RUTA_CONFIG_PANTALLA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsopc_pantalla.json")
 RUTA_EDITOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor.html")
 RUTA_PANTALLA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pantalla.html")
-_diseno = {"valor": None, "lock": threading.Lock()}
+_diseno = {"valor": None, "pantalla": None, "lock": threading.Lock()}
+DESTINOS = {
+    "movil": (RUTA_CONFIG, DISENO_POR_DEFECTO),
+    "pantalla": (RUTA_CONFIG_PANTALLA, DISENO_PANTALLA_POR_DEFECTO),
+}
 
 
 def _color(v, defecto):
@@ -725,7 +756,7 @@ def _color(v, defecto):
     return defecto
 
 
-def validar_diseno(d):
+def validar_diseno(d, destino="movil"):
     """Devuelve un diseno limpio; lanza ValueError si no sirve."""
     if not isinstance(d, dict):
         raise ValueError("el diseno debe ser un objeto")
@@ -758,37 +789,54 @@ def validar_diseno(d):
         alerta = max(50, min(110, int(d.get("alerta_temp", 90))))
     except (TypeError, ValueError):
         alerta = 90
-    return {"version": int(time.time()), "tema": tema, "cabecera": bool(d.get("cabecera", True)),
-            "alerta_temp": alerta, "paginas": paginas}
+    limpio = {"version": int(time.time()), "tema": tema, "cabecera": bool(d.get("cabecera", True)),
+              "alerta_temp": alerta, "paginas": paginas}
+    if destino == "pantalla":
+        try:
+            fija = int(d.get("pagina_fija", -1))
+        except (TypeError, ValueError):
+            fija = -1
+        limpio["pagina_fija"] = fija if 0 <= fija < len(paginas) else -1
+        try:
+            limpio["segundos"] = max(5, min(600, int(d.get("segundos", 15))))
+        except (TypeError, ValueError):
+            limpio["segundos"] = 15
+    return limpio
+
+
+def _clave(destino):
+    return "pantalla" if destino == "pantalla" else "valor"
 
 
 def cargar_diseno():
-    try:
-        with open(RUTA_CONFIG, encoding="utf-8") as f:
-            d = validar_diseno(json.load(f))
-    except FileNotFoundError:
-        d = validar_diseno(DISENO_POR_DEFECTO)
-    except Exception as e:
-        print("  Diseno: pulsopc_config.json no es valido (%s); uso el de por defecto." % e)
-        d = validar_diseno(DISENO_POR_DEFECTO)
-    with _diseno["lock"]:
-        _diseno["valor"] = d
+    for destino, (ruta, defecto) in DESTINOS.items():
+        try:
+            with open(ruta, encoding="utf-8") as f:
+                d = validar_diseno(json.load(f), destino)
+        except FileNotFoundError:
+            d = validar_diseno(defecto, destino)
+        except Exception as e:
+            print("  Diseno: %s no es valido (%s); uso el de por defecto." % (os.path.basename(ruta), e))
+            d = validar_diseno(defecto, destino)
+        with _diseno["lock"]:
+            _diseno[_clave(destino)] = d
 
 
-def guardar_diseno(d):
-    d = validar_diseno(d)
-    tmp = RUTA_CONFIG + ".tmp"
+def guardar_diseno(d, destino="movil"):
+    d = validar_diseno(d, destino)
+    ruta = DESTINOS[destino][0]
+    tmp = ruta + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, RUTA_CONFIG)
+    os.replace(tmp, ruta)
     with _diseno["lock"]:
-        _diseno["valor"] = d
+        _diseno[_clave(destino)] = d
     return d
 
 
-def diseno_actual():
+def diseno_actual(destino="movil"):
     with _diseno["lock"]:
-        return _diseno["valor"]
+        return _diseno[_clave(destino)]
 
 
 # ------------------------------------------------------------------- HTTP --
@@ -829,6 +877,9 @@ class Manejador(BaseHTTPRequestHandler):
         self._enviar(codigo, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
                      "application/json; charset=utf-8")
 
+    def _destino(self):
+        return "pantalla" if "destino=pantalla" in self.path else "movil"
+
     def _es_local(self):
         ip = self.client_address[0]
         return ip.startswith("127.") or ip == "::1" or ip == ip_local()
@@ -850,11 +901,13 @@ class Manejador(BaseHTTPRequestHandler):
                 _ultimo["via"] = "USB" if local else "Wi-Fi"
             with _ultimo["lock"]:
                 datos = dict(_ultimo["stats"])
-            datos["diseno"] = diseno_actual()
+            datos["diseno"] = diseno_actual("pantalla" if pantalla else "movil")
             self._json(datos)
         elif ruta == "/config":
-            self._json({"diseno": diseno_actual(), "tipos": TIPOS_WIDGET, "metricas": METRICAS_GRAFICA,
-                        "por_defecto": validar_diseno(DISENO_POR_DEFECTO)})
+            destino = self._destino()
+            self._json({"diseno": diseno_actual(destino), "tipos": TIPOS_WIDGET, "metricas": METRICAS_GRAFICA,
+                        "destino": destino,
+                        "por_defecto": validar_diseno(DESTINOS[destino][1], destino)})
         elif ruta == "/portada":
             r = ruta_portada()
             if not r:
@@ -918,7 +971,7 @@ class Manejador(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", "0"))
             if n > 200000:
                 raise ValueError("demasiado grande")
-            d = guardar_diseno(json.loads(self.rfile.read(n).decode("utf-8")))
+            d = guardar_diseno(json.loads(self.rfile.read(n).decode("utf-8")), self._destino())
             self._json({"ok": True, "diseno": d})
         except Exception as e:
             self._json({"error": str(e)}, 400)

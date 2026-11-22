@@ -55,12 +55,20 @@ label{display:flex;align-items:center;justify-content:space-between;gap:8px;marg
 input[type=color]{width:44px;height:28px;border:1px solid var(--borde);border-radius:6px;background:none;padding:0}
 .fila{display:flex;gap:6px;flex-wrap:wrap}
 .vacio{color:var(--tenue)}
+.destinos{display:flex;gap:4px;background:#1b1f27;border:1px solid var(--borde);border-radius:9px;padding:3px;margin-left:12px}
+.destinos button{border:0;background:none;padding:5px 14px;border-radius:7px;color:var(--tenue)}
+.destinos button.sel{background:var(--acento);color:#06140f;font-weight:600}
+body.hub .pantalla{aspect-ratio:1024/600}
+body.hub .movil{border-radius:18px;padding:16px;max-width:820px}
+.solo-hub{display:none}body.hub .solo-hub{display:block}
+body.hub .solo-movil{display:none}
 </style>
 </head>
 <body>
 <header>
   <svg width="26" height="26" viewBox="0 0 48 48"><rect x="2" y="2" width="44" height="44" rx="9" fill="#0E1116"/><path d="M7 26h9l4-10 6 18 4-8h11" fill="none" stroke="#3EC7A0" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  <h1>PulsePC · Personalizar el móvil</h1>
+  <h1>PulsePC · Personalizar</h1>
+  <div class="destinos"><button id="dMovil">Móvil</button><button id="dHub">Nest Hub</button></div>
   <span id="estado">Cargando…</span>
 </header>
 <main>
@@ -71,6 +79,13 @@ input[type=color]{width:44px;height:28px;border:1px solid var(--borde);border-ra
       <div class="fila" style="margin-top:8px"><button id="nuevaPag">+ Página</button></div>
     </div>
     <div class="bloque" id="ajustesPag"></div>
+    <div class="bloque solo-hub">
+      <h2>En el Nest Hub</h2>
+      <label>Página que se ve <select id="hFija" style="max-width:130px"></select></label>
+      <label id="hSegL">Segundos por página <input type="number" id="hSeg" min="5" max="600"></label>
+      <p class="vacio" style="font-size:12px;margin:6px 0">El Nest Hub no deja tocar la pantalla, así que aquí eliges qué página se queda fija o cada cuánto se pasan.</p>
+      <button id="hCopiar">Copiar el diseño del móvil</button>
+    </div>
     <div class="bloque">
       <h2>Añadir widget</h2>
       <div class="paleta" id="paleta"></div>
@@ -79,12 +94,13 @@ input[type=color]{width:44px;height:28px;border:1px solid var(--borde);border-ra
 
   <div class="lienzo">
     <div class="movil"><div class="pantalla" id="pantalla"></div></div>
-    <p class="ayuda">Si una temperatura pasa del límite de alerta, su tarjeta parpadea en rojo en el móvil. Los botones del widget Multimedia controlan la música del PC.</p>
-    <p class="ayuda">Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Los cambios se guardan solos y el móvil los aplica en un segundo. En el móvil, toca la pantalla para pasar de página.</p>
+    <p class="ayuda solo-movil">Si una temperatura pasa del límite de alerta, su tarjeta parpadea en rojo en el móvil. Los botones del widget Multimedia controlan la música del PC.</p>
+    <p class="ayuda solo-movil">Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Los cambios se guardan solos y el móvil los aplica en un segundo. En el móvil, toca la pantalla para pasar de página.</p>
+    <p class="ayuda solo-hub">Este es el diseño del Nest Hub, independiente del del móvil. Arrastra los widgets para reordenarlos y haz clic en uno para cambiar su tamaño. Se guarda solo y, si estás enviando PulsePC al Nest Hub, lo aplica en un segundo. Para enviarlo, usa <b>Enviar al Nest Hub</b> en el icono de PulsePC.</p>
   </div>
 
   <section>
-    <div class="bloque" id="ajustesWidget"><h2>Widget</h2><p class="vacio">Haz clic en un widget del móvil para editarlo.</p></div>
+    <div class="bloque" id="ajustesWidget"><h2>Widget</h2><p class="vacio">Haz clic en un widget de la vista previa para editarlo.</p></div>
     <div class="bloque">
       <h2>Colores</h2>
       <div class="temas" id="temas"></div>
@@ -110,23 +126,27 @@ const TEMAS = [
   {fondo:"#0B0820",tarjeta:"#17123A",acento:"#B07CFF",secundario:"#3DD6F5",texto:"#ECE8FF"},
   {fondo:"#0A140E",tarjeta:"#13231A",acento:"#8BE04E",secundario:"#E0C24E",texto:"#E4F2E8"},
 ];
+let DEST=location.hash==="#pantalla"?"pantalla":"movil";
 let arrastre=false, D=null, defecto=null, tipos=[], pag=0, selW=-1, stats={}, temporizador=null;
 const $=id=>document.getElementById(id);
 
 function estado(t,c){const e=$("estado");e.textContent=t;e.className=c||""}
 
 async function cargar(){
-  const r=await fetch("/config");const j=await r.json();
-  D=j.diseno;defecto=j.por_defecto;tipos=j.tipos;pintar();estado("Conectado al agente","ok");
+  document.body.classList.toggle("hub",DEST==="pantalla");
+  $("dMovil").className=DEST==="movil"?"sel":"";$("dHub").className=DEST==="pantalla"?"sel":"";
+  const r=await fetch("/config?destino="+DEST);const j=await r.json();
+  D=j.diseno;defecto=j.por_defecto;tipos=j.tipos;pag=0;selW=-1;pintar();estado("Conectado al agente","ok");
 }
 function guardar(){
   estado("Guardando…");clearTimeout(temporizador);
+  const dest=DEST,d=D;
   temporizador=setTimeout(async()=>{
     try{
-      const r=await fetch("/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(D)});
+      const r=await fetch("/config?destino="+dest,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});
       const j=await r.json();
       if(!r.ok)throw new Error(j.error||r.status);
-      D.version=j.diseno.version;estado("Guardado · el móvil ya lo muestra","ok");
+      d.version=j.diseno.version;estado(dest==="pantalla"?"Guardado · el Nest Hub ya lo muestra":"Guardado · el móvil ya lo muestra","ok");
     }catch(e){estado("No se pudo guardar: "+e.message,"err")}
   },300);
 }
@@ -173,7 +193,8 @@ function pintar(){
   $("paginas").innerHTML="";
   D.paginas.forEach((pg,i)=>{
     const d=document.createElement("div");d.className="pag"+(i===pag?" sel":"");
-    d.innerHTML=`<span>${esc(pg.nombre)}</span><small>${pg.widgets.length}</small>`;
+    const fijada=DEST==="pantalla"&&D.pagina_fija===i;
+    d.innerHTML=`<span>${fijada?"📌 ":""}${esc(pg.nombre)}</span><small>${pg.widgets.length}</small>`;
     d.onclick=()=>{pag=i;selW=-1;pintar()};$("paginas").appendChild(d);
   });
   // ajustes de página
@@ -188,6 +209,7 @@ function pintar(){
   $("pFilas").onchange=e=>{p.filas=lim(e.target.value,1,4);cambio()};
   $("pIzq").onclick=()=>moverPag(-1);$("pDer").onclick=()=>moverPag(1);
   $("pBorrar").onclick=()=>{if(D.paginas.length<2)return alert("Tiene que quedar al menos una página");
+    if(D.pagina_fija===pag)D.pagina_fija=-1;else if(D.pagina_fija>pag)D.pagina_fija--;
     D.paginas.splice(pag,1);pag=Math.max(0,pag-1);selW=-1;cambio()};
   // paleta
   $("paleta").innerHTML="";
@@ -218,7 +240,7 @@ function pintar(){
   pan.appendChild(rj);
   // ajustes del widget
   const aw=$("ajustesWidget");
-  if(selW<0||!p.widgets[selW]){aw.innerHTML=`<h2>Widget</h2><p class="vacio">Haz clic en un widget del móvil para editarlo.</p>`+(fuera?`<p class="aviso">${fuera} widget(s) no caben en esta página. Añade filas o columnas, o hazlos más pequeños.</p>`:"")}
+  if(selW<0||!p.widgets[selW]){aw.innerHTML=`<h2>Widget</h2><p class="vacio">Haz clic en un widget de la vista previa para editarlo.</p>`+(fuera?`<p class="aviso">${fuera} widget(s) no caben en esta página. Añade filas o columnas, o hazlos más pequeños.</p>`:"")}
   else{const w=p.widgets[selW];
     aw.innerHTML=`<h2>Widget · ${NOMBRES[w.tipo]}</h2>
       <label>Título <input type="text" id="wTit" style="width:150px" placeholder="${NOMBRES[w.tipo]}" value="${esc(w.titulo||"")}"></label>
@@ -245,17 +267,32 @@ function pintar(){
   $("colores").innerHTML=Object.keys(ETQ_COLOR).map(k=>`<label>${ETQ_COLOR[k]} <input type="color" data-k="${k}" value="${T[k]}"></label>`).join("");
   $("colores").querySelectorAll("input").forEach(i=>i.oninput=e=>{D.tema[e.target.dataset.k]=e.target.value.toUpperCase();pintarPantallaRapido();guardar()});
   $("cabecera").checked=!!D.cabecera;
+  if(DEST==="pantalla"){
+    const fj=D.pagina_fija==null?-1:D.pagina_fija;
+    $("hFija").innerHTML=`<option value="-1">Pasar solas</option>`+D.paginas.map((pg,i)=>`<option value="${i}"${i===fj?" selected":""}>Fija: ${esc(pg.nombre)}</option>`).join("");
+    $("hFija").value=String(fj);
+    if(document.activeElement!==$("hSeg"))$("hSeg").value=D.segundos||15;
+    $("hSegL").style.display=fj<0?"flex":"none";
+  }
   if(document.activeElement!==$("alerta"))$("alerta").value=D.alerta_temp||90;
 }
 function pintarListaSolo(){const els=$("paginas").querySelectorAll(".pag span");els[pag]&&(els[pag].textContent=D.paginas[pag].nombre)}
 function pintarPantallaRapido(){const T=D.tema;document.documentElement.style.setProperty("--c-acento",T.acento);
   const pan=$("pantalla");pan.style.background=T.fondo;pan.style.color=T.texto;pan.querySelectorAll(".w").forEach(w=>w.style.background=T.tarjeta)}
-function moverPag(d){const j=pag+d;if(j<0||j>=D.paginas.length)return;const[m]=D.paginas.splice(pag,1);D.paginas.splice(j,0,m);pag=j;cambio()}
+function moverPag(d){const j=pag+d;if(j<0||j>=D.paginas.length)return;
+  if(D.pagina_fija===pag)D.pagina_fija=j;else if(D.pagina_fija===j)D.pagina_fija=pag;const[m]=D.paginas.splice(pag,1);D.paginas.splice(j,0,m);pag=j;cambio()}
 function moverW(d){const p=D.paginas[pag],j=selW+d;if(j<0||j>=p.widgets.length)return;const[m]=p.widgets.splice(selW,1);p.widgets.splice(j,0,m);selW=j;cambio()}
 function lim(v,a,b){v=parseInt(v,10);return isNaN(v)?a:Math.max(a,Math.min(b,v))}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
 $("nuevaPag").onclick=()=>{D.paginas.push({nombre:"Página "+(D.paginas.length+1),columnas:3,filas:2,widgets:[]});pag=D.paginas.length-1;selW=-1;cambio()};
+$("hFija").onchange=e=>{D.pagina_fija=parseInt(e.target.value,10);if(D.pagina_fija>=0){pag=D.pagina_fija;selW=-1}cambio()};
+$("hSeg").onchange=e=>{D.segundos=lim(e.target.value,5,600);cambio()};
+$("hCopiar").onclick=async()=>{if(!confirm("¿Copiar el diseño del móvil al Nest Hub? Se sustituye el diseño actual del Nest Hub."))return;
+  const j=await (await fetch("/config?destino=movil")).json();const fj=D.pagina_fija,sg=D.segundos;
+  D=JSON.parse(JSON.stringify(j.diseno));D.pagina_fija=-1;D.segundos=sg||15;pag=0;selW=-1;cambio()};
+function irA(d){if(d===DEST)return;DEST=d;history.replaceState(null,"",d==="pantalla"?"#pantalla":"#");cargar()}
+$("dMovil").onclick=()=>irA("movil");$("dHub").onclick=()=>irA("pantalla");
 $("cabecera").onchange=e=>{D.cabecera=e.target.checked;cambio()};
 $("alerta").onchange=e=>{D.alerta_temp=lim(e.target.value,50,110);cambio()};
 $("restaurar").onclick=()=>{if(confirm("¿Volver al diseño original? Perderás tus cambios.")){D=JSON.parse(JSON.stringify(defecto));pag=0;selW=-1;cambio()}};

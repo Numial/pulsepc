@@ -329,6 +329,7 @@ def main():
                          visible=lambda it: es_windows and agente.es_admin() and not agente.pawnio_instalado()),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Personalizar el móvil", lambda i, it: webbrowser.open(url + "/editor"), default=True),
+        pystray.MenuItem("Personalizar el Nest Hub", lambda i, it: webbrowser.open(url + "/editor#pantalla")),
         pystray.MenuItem("Ver panel web", lambda i, it: webbrowser.open(url + "/pantalla")),
         pystray.MenuItem(lambda it: ("Nest Hub: enviando a %s" % cast.mostrando()) if cast.mostrando()
                          else "Enviar al Nest Hub", pystray.Menu(opciones_pantalla)),

@@ -59,7 +59,8 @@ PulsePC también se puede ver en un **Nest Hub** (o cualquier pantalla con Chrom
 No se envía solo: tú eliges cuándo desde el icono de la bandeja, en *Enviar al Nest Hub → Enviar a …*, y lo quitas con *Dejar de enviar*.
 
 - El Nest Hub tiene que estar en la misma Wi‑Fi que el PC (y el firewall debe permitir redes privadas).
-- Las páginas se pasan solas cada 15 s, porque el Nest Hub no deja tocar las páginas enviadas.
+- Tiene **su propio diseño**, aparte del del móvil: en el editor (*Personalizar el Nest Hub* en el icono, o la pestaña *Nest Hub* del editor) eliges páginas, widgets y colores igual que para el móvil.
+- Como el Nest Hub no deja tocar las páginas enviadas, en el editor eliges si se **queda fija una página** o si se pasan solas (y cada cuántos segundos).
 - Si el Nest Hub la cierra por su cuenta, PulsePC la vuelve a abrir mientras no pulses *Dejar de enviar*.
 - La misma pantalla se ve en el navegador en `http://localhost:47801/pantalla`.
 
