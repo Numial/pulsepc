@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title PulsoPC - agente
+title PulsoPC
 
 rem --- Buscar Python: lanzador "py", "python" real (no el atajo de la Microsoft Store) o rutas habituales ---
 set "PY="
@@ -29,7 +29,17 @@ if not defined PY (
   exit /b 1
 )
 
-echo Usando Python: %PY%
-%PY% -m pip install --quiet --disable-pip-version-check psutil
-%PY% pulsopc_agente.py
-pause
+rem --- Version sin consola (pythonw / pyw) ---
+set "PYW=%PY:python.exe=pythonw.exe%"
+if /i "%PY:~0,2%"=="py" set "PYW=pyw -3"
+
+echo Preparando PulsoPC (solo la primera vez tarda un poco)...
+%PY% -m pip install --quiet --disable-pip-version-check psutil pystray pillow
+if errorlevel 1 (
+  echo No se pudieron instalar las dependencias. Revisa tu conexion a Internet.
+  pause
+  exit /b 1
+)
+rem Arranca en segundo plano: aparece el icono junto al reloj y esta ventana se cierra.
+start "" %PYW% "%~dp0pulsopc_bandeja.pyw"
+exit /b 0

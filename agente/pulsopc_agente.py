@@ -34,7 +34,21 @@ PUERTO_HTTP = 47801
 PUERTO_DESCUBRIMIENTO = 47800
 LHM_URL = "http://127.0.0.1:8085/data.json"
 
-_ultimo = {"stats": {}, "lock": threading.Lock()}
+_ultimo = {"stats": {}, "lock": threading.Lock(), "pedido": 0.0}
+
+# Estado para el icono de la bandeja
+estado = {"usb": set(), "avisos": []}
+
+
+def avisar(texto):
+    """Mensaje para el usuario: consola si la hay; si no, notificacion de la bandeja."""
+    print(texto)
+    estado["avisos"].append(texto)
+
+
+def movil_conectado():
+    """Hay un movil leyendo datos (por USB o Wi-Fi) en los ultimos 5 s."""
+    return time.time() - _ultimo["pedido"] < 5
 
 
 # ---------------------------------------------------------------- lectores --
@@ -199,6 +213,8 @@ class Muestreador:
 
 
 def bucle_muestreo(intervalo):
+    """Lee el PC cada 'intervalo' s. Si nadie pide datos (movil desconectado),
+    baja a una lectura cada 5 s para no gastar CPU en segundo plano."""
     m = Muestreador()
     time.sleep(intervalo)
     while True:
@@ -208,7 +224,8 @@ def bucle_muestreo(intervalo):
                 _ultimo["stats"] = s
         except Exception as e:  # nunca dejar morir el hilo
             print("Error leyendo estadisticas:", e)
-        time.sleep(intervalo)
+        reposo = time.time() - _ultimo["pedido"] > 10
+        time.sleep(max(intervalo, 5.0) if reposo else intervalo)
 
 
 def bucle_anuncio(puerto_http):
@@ -261,7 +278,7 @@ def bucle_usb(puerto_http, mantener_app=True):
     """
     adb = buscar_adb()
     if not adb:
-        print("  USB: no encuentro adb (instala Android Platform Tools); solo Wi-Fi.")
+        avisar("USB: no encuentro adb (instala Android Platform Tools); solo Wi-Fi.")
         return
     flags = 0x08000000 if platform.system() == "Windows" else 0
     regla = "tcp:%d" % puerto_http
@@ -296,13 +313,14 @@ def bucle_usb(puerto_http, mantener_app=True):
             for sn in serials:
                 sh(sn, "reverse", regla, regla)
                 if sn not in conocidos:
-                    print("  USB: movil %s conectado por cable. Abriendo PulsoPC..." % sn)
+                    avisar("Movil conectado por USB. Abriendo PulsoPC...")
                     sh(sn, "shell", "svc", "power", "stayon", "usb")  # pantalla encendida con USB
                     abrir_app(sn)
                     conocidos.add(sn)
                 elif mantener_app and not app_delante(sn):
                     abrir_app(sn)
             conocidos &= set(serials)
+            estado["usb"] = set(serials)
         except Exception:
             pass
         time.sleep(5)
@@ -457,6 +475,7 @@ class Manejador(BaseHTTPRequestHandler):
     def do_GET(self):
         ruta = self.path.split("?")[0]
         if ruta == "/stats":
+            _ultimo["pedido"] = time.time()
             with _ultimo["lock"]:
                 datos = dict(_ultimo["stats"])
             datos["diseno"] = diseno_actual()
@@ -507,26 +526,51 @@ def ip_local():
         s.close()
 
 
+class Servidor(ThreadingHTTPServer):
+    daemon_threads = True
+    # En Windows, SO_REUSEADDR deja abrir dos agentes en el mismo puerto: lo evitamos
+    # para detectar que PulsoPC ya esta abierto.
+    allow_reuse_address = platform.system() != "Windows"
+
+    def server_bind(self):
+        if platform.system() == "Windows" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+def arrancar(puerto=PUERTO_HTTP, intervalo=1.0, mantener_app=True):
+    """Arranca todo en hilos y devuelve el servidor HTTP (sin bloquear).
+    Lanza OSError si el puerto ya esta en uso (otro agente abierto)."""
+    srv = Servidor(("0.0.0.0", puerto), Manejador)
+    cargar_diseno()
+    threading.Thread(target=bucle_muestreo, args=(intervalo,), daemon=True).start()
+    threading.Thread(target=bucle_anuncio, args=(puerto,), daemon=True).start()
+    threading.Thread(target=bucle_usb, args=(puerto, mantener_app), daemon=True).start()
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Agente PulsoPC")
+    ap = argparse.ArgumentParser(description="Agente PulsoPC (modo consola)")
     ap.add_argument("--puerto", type=int, default=PUERTO_HTTP)
     ap.add_argument("--intervalo", type=float, default=1.0, help="segundos entre lecturas")
     ap.add_argument("--no-mantener-app", action="store_true",
                     help="no volver a abrir la app del movil si se cierra (por USB)")
     a = ap.parse_args()
 
-    cargar_diseno()
-    threading.Thread(target=bucle_muestreo, args=(a.intervalo,), daemon=True).start()
-    threading.Thread(target=bucle_anuncio, args=(a.puerto,), daemon=True).start()
-    threading.Thread(target=bucle_usb, args=(a.puerto, not a.no_mantener_app), daemon=True).start()
-
-    srv = ThreadingHTTPServer(("0.0.0.0", a.puerto), Manejador)
+    try:
+        arrancar(a.puerto, a.intervalo, not a.no_mantener_app)
+    except OSError:
+        print("El puerto %d ya esta en uso: seguramente PulsoPC ya esta abierto "
+              "(mira el icono junto al reloj)." % a.puerto)
+        return
     print("PulsoPC agente en marcha.")
     print("  Panel web: http://%s:%d/" % (ip_local(), a.puerto))
     print("  Personalizar el movil: http://localhost:%d/editor" % a.puerto)
     print("  Wi-Fi: la app del movil lo encontrara sola en la misma red.")
     try:
-        srv.serve_forever()
+        while True:
+            time.sleep(3600)
     except KeyboardInterrupt:
         pass
 

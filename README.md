@@ -16,9 +16,13 @@ Mira las estadísticas de tu PC en tiempo real en un móvil antiguo (Android 6.0
 
 Requiere Python 3.8+.
 
-1. Doble clic en `agente/iniciar_agente.bat` (instala `psutil` y arranca).
+1. Doble clic en `agente/iniciar_agente.bat`. Instala lo necesario (`psutil`, `pystray`, `pillow`), cierra su ventana y deja **PulsoPC en la bandeja**, junto al reloj (puede estar dentro de la flechita ^).
 2. La primera vez, Windows pedirá permiso en el firewall: permite **redes privadas**.
-3. La ventana muestra la dirección, p. ej. `http://192.168.1.20:47801/`. Ese panel web también funciona en el navegador de cualquier móvil.
+3. Desde el icono: *Personalizar el móvil*, *Ver panel web*, *Arrancar con Windows* y *Salir*. El icono se pone verde cuando el móvil está leyendo datos.
+
+**Arranque automático:** la primera vez se activa *Arrancar con Windows*. PulsoPC queda esperando con muy poco consumo (lee el PC cada 5 s mientras no hay móvil) y, en cuanto enchufas el móvil por USB, le abre la app y te avisa con una notificación. Se puede desactivar desde el menú del icono.
+
+¿Prefieres verlo en una ventana de consola para depurar? Usa `agente/iniciar_agente_consola.bat`. El registro del modo bandeja está en `agente/pulsopc.log`.
 
 **Temperaturas en Windows:** Windows no las da directamente. Abre [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) como administrador y activa *Options → Remote Web Server → Run* (puerto 8085). El agente las leerá de ahí.
 
@@ -44,7 +48,7 @@ Con el agente abierto, abre **`agente/personalizar.bat`** (o `http://localhost:4
 
 ### Móvil fijo dentro del PC
 
-- **Arranque del agente con Windows:** ejecuta una vez `agente/arrancar_con_windows.bat`.
+- **Arranque del agente con Windows:** activado por defecto desde el icono de la bandeja.
 - **La app se abre sola** al encender el móvil y al recibir corriente por el cable (al encender el PC).
 - **Por USB, el agente además** enciende la pantalla, la mantiene encendida mientras haya cable y vuelve a abrir la app si se cierra. Para desactivar esto último: `pulsopc_agente.py --no-mantener-app`.
 - Quita el PIN o patrón de bloqueo del móvil (pon *Ninguno* o *Deslizar*) para que la app se vea sin desbloquear.
