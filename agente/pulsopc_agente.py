@@ -423,7 +423,19 @@ def bucle_medios():
 
 
 def leer_medios():
-    return _medios["datos"] if time.time() - _medios["t"] < 5 else {}
+    """Lo que suena, sin la ruta local de la portada (la app la pide en /portada)."""
+    if time.time() - _medios["t"] >= 5:
+        return {}
+    d = dict(_medios["datos"])
+    d.pop("portada_ruta", None)
+    return d
+
+
+def ruta_portada():
+    if time.time() - _medios["t"] >= 5:
+        return None
+    r = _medios["datos"].get("portada_ruta") or ""
+    return r if r and os.path.isfile(r) else None
 
 
 def widget_en_uso(tipo):
@@ -808,6 +820,15 @@ class Manejador(BaseHTTPRequestHandler):
         elif ruta == "/config":
             self._json({"diseno": diseno_actual(), "tipos": TIPOS_WIDGET, "metricas": METRICAS_GRAFICA,
                         "por_defecto": validar_diseno(DISENO_POR_DEFECTO)})
+        elif ruta == "/portada":
+            r = ruta_portada()
+            if not r:
+                self.send_error(404)
+                return
+            with open(r, "rb") as f:
+                datos = f.read()
+            tipo = "image/png" if datos[:4] == b"\x89PNG" else "image/jpeg"
+            self._enviar(200, datos, tipo)
         elif ruta == "/editor":
             try:
                 with open(RUTA_EDITOR, "rb") as f:

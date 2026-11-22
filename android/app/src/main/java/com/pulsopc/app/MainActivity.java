@@ -175,6 +175,7 @@ public class MainActivity extends Activity {
             }
 
             actual = via;
+            if (j != null) actualizarPortada(via, j.optJSONObject("medios"));
             if (j != null && j.has("cpu")) {
                 panel.setConexion(HOST_USB.equals(via) ? "USB" : "Wi-Fi " + via.split(":")[0]);
                 publicar(j, null);
@@ -201,6 +202,42 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private String portadaId = "";
+
+    /** Descarga la portada del disco solo cuando cambia la cancion. */
+    private void actualizarPortada(String h, JSONObject medios) {
+        String id = medios != null ? medios.optString("portada_id", "") : "";
+        if (id.equals(portadaId)) return;
+        portadaId = id;
+        android.graphics.Bitmap bmp = null;
+        if (!id.isEmpty()) {
+            try {
+                HttpURLConnection c = (HttpURLConnection) new URL("http://" + h + "/portada").openConnection();
+                c.setConnectTimeout(1500);
+                c.setReadTimeout(3000);
+                InputStream in = c.getInputStream();
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] b = new byte[16384];
+                int n;
+                while ((n = in.read(b)) > 0) out.write(b, 0, n);
+                c.disconnect();
+                byte[] datos = out.toByteArray();
+                android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+                o.inJustDecodeBounds = true;
+                android.graphics.BitmapFactory.decodeByteArray(datos, 0, datos.length, o);
+                int escala = 1;
+                while (o.outWidth / (escala * 2) >= 256 && o.outHeight / (escala * 2) >= 256) escala *= 2;
+                o = new android.graphics.BitmapFactory.Options();
+                o.inSampleSize = escala;
+                bmp = android.graphics.BitmapFactory.decodeByteArray(datos, 0, datos.length, o);
+            } catch (Exception e) {
+                portadaId = "";   // reintentar en la siguiente vuelta
+            }
+        }
+        final android.graphics.Bitmap fin = bmp;
+        ui.post(new Runnable() { public void run() { panel.setPortada(fin); } });
     }
 
     /** Boton multimedia del movil: el agente pulsa la tecla multimedia en el PC. */

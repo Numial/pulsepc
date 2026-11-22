@@ -43,6 +43,7 @@ public class PanelView extends View {
     private final Paint pRelleno = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pTrazo = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pTexto = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pImagen = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final RectF r = new RectF();
     private final Path ruta = new Path();
 
@@ -61,6 +62,9 @@ public class PanelView extends View {
     private final java.util.ArrayList<String> acciones = new java.util.ArrayList<>();
     private String pulsado;
     private long pulsadoHasta;
+
+    private android.graphics.Bitmap portada;
+    public void setPortada(android.graphics.Bitmap b) { portada = b; invalidate(); }
 
     public interface OyenteAccion { void onAccion(String accion); }
     private OyenteAccion oyente;
@@ -398,17 +402,32 @@ public class PanelView extends View {
         boolean sonando = m != null && "reproduciendo".equals(m.optString("estado", ""));
         float top = y + 24 * dp;
         if (!tituloM.isEmpty()) {
+            // Portada a la izquierda (si hay espacio), titulo y artista a su lado
+            float lado = Math.min(Math.max(44 * dp, h * 0.32f), w * 0.4f);
+            float tx = x;
+            if (portada != null) {
+                r.set(x, top, x + lado, top + lado);
+                c.save();
+                ruta.reset();
+                ruta.addRoundRect(r, 6 * dp, 6 * dp, Path.Direction.CW);
+                c.clipPath(ruta);
+                c.drawBitmap(portada, null, r, pImagen);
+                c.restore();
+                tx = x + lado + 10 * dp;
+            }
+            float tw = x + w - tx;
+            float cy = portada != null ? top + lado / 2 - 8 * dp : top + 6 * dp;
             pTexto.setTextAlign(Paint.Align.LEFT);
             pTexto.setColor(TEXTO);
             pTexto.setTextSize(16 * dp);
-            c.drawText(encajar(tituloM, w), x, top + 14 * dp, pTexto);
+            c.drawText(encajar(tituloM, tw), tx, cy + 8 * dp, pTexto);
             pTexto.setColor(TENUE);
             pTexto.setTextSize(12 * dp);
             String sub = artista;
             String app = m.optString("app", "");
             if (!app.isEmpty()) sub = sub.isEmpty() ? app : sub + "  ·  " + app;
-            c.drawText(encajar(sub, w), x, top + 32 * dp, pTexto);
-            top += 40 * dp;
+            c.drawText(encajar(sub, tw), tx, cy + 26 * dp, pTexto);
+            top += (portada != null ? lado : 34 * dp) + 8 * dp;
         }
         // Dos filas de botones: anterior / play-pausa / siguiente y volumen - / silencio / +
         float zonaH = y + h - top;
