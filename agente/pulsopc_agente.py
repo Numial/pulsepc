@@ -273,7 +273,9 @@ def datos_lhm_integrado():
             nombre = x["nombre"]
             # Los NVMe publican sus umbrales ("Warning Temperature", "Critical Temperature")
             # como si fueran sensores: no son lecturas y en el movil parecian alarmas.
-            if any(p in nombre for p in ("Warning", "Critical", "Limit", "Threshold")):
+            # Igual con "Distance to TjMax" de Intel: es el margen hasta el limite termico
+            # (55 = faltan 55 °C), no una temperatura, y se colaba en la lista como si lo fuera.
+            if any(p in nombre for p in ("Warning", "Critical", "Limit", "Threshold", "Distance")):
                 continue
             if x["tipo_hw"] == "Storage":
                 if x["hw"] in disco_hecho:
