@@ -359,6 +359,31 @@ def main():
             icon.update_menu()
         threading.Thread(target=_p, daemon=True).start()
 
+    def confirmar(texto):
+        import ctypes
+        # MB_YESNO | MB_ICONQUESTION | MB_TOPMOST; 6 = "Si"
+        return ctypes.windll.user32.MessageBoxW(None, texto, "PulsePC", 0x4 | 0x20 | 0x40000) == 6
+
+    def reiniciar_pantalla(uuid, nombre):
+        def _accion(icon, item):
+            def _r():
+                if not confirmar(tr("¿Reiniciar %s?\n\nSe apagará y volverá a encenderse en un minuto, "
+                                    "como si lo desenchufaras. No se borra nada.",
+                                    "Restart %s?\n\nIt will turn off and back on in about a minute, "
+                                    "like unplugging it. Nothing is erased.") % nombre):
+                    return
+                try:
+                    cast.reiniciar(uuid)
+                    avisar_local(tr("Reiniciando %s. Cuando vuelva a encenderse (1-2 min), envíale PulsePC otra vez.",
+                                    "Restarting %s. When it is back on (1-2 min), send PulsePC to it again.") % nombre)
+                except Exception as e:
+                    avisar_local(tr("%s no acepta el reinicio por la red (%s). Desenchúfalo 10 s y vuelve a enchufarlo.",
+                                    "%s refused the network restart (%s). Unplug it for 10 s and plug it back in.")
+                                 % (nombre, e))
+                icon.update_menu()
+            threading.Thread(target=_r, daemon=True).start()
+        return _accion
+
     def opciones_pantalla():
         est = cast.estado
         if not cast.disponible():
@@ -377,6 +402,11 @@ def main():
         elif est["buscado"] and not est["pantallas"]:
             yield pystray.MenuItem(tr("No encuentro ninguna pantalla en tu Wi-Fi", "No displays found on your Wi-Fi"), None, enabled=False)
         yield pystray.MenuItem(tr("Buscar pantallas otra vez", "Search for displays again"), buscar_pantallas, enabled=not est["buscando"])
+        if est["pantallas"]:
+            yield pystray.Menu.SEPARATOR
+            for p in est["pantallas"]:
+                yield pystray.MenuItem(tr("Reiniciar %s…", "Restart %s…") % p["nombre"],
+                                       reiniciar_pantalla(p["uuid"], p["nombre"]))
 
     menu = pystray.Menu(
         pystray.MenuItem(lambda it: agente.estado_lhm["texto"], None, enabled=False),

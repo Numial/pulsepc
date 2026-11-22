@@ -175,3 +175,38 @@ def parar():
                 logging.info("Dejo de enviar a %s", c.cast_info.friendly_name)
         except Exception as e:
             logging.info("No pude cerrar la pantalla %s: %s", nombre or "", e)
+
+
+def reiniciar(uuid):
+    """Reinicia el Nest Hub por la red (como desenchufarlo). Devuelve True si lo acepto.
+
+    Usa la API local de configuracion del aparato (puerto 8443 y, si no, 8008), que sigue
+    respondiendo aunque se haya bloqueado la parte de Chromecast (puerto 8009)."""
+    import json
+    import ssl
+    import urllib.request
+    cast = _casts.get(uuid)
+    if cast is None:
+        raise RuntimeError("No encuentro esa pantalla; vuelve a buscar.")
+    host = cast.cast_info.host
+    nombre = cast.cast_info.friendly_name or "Nest Hub"
+    if estado["enviando"] == nombre:
+        _parar.set()
+        estado["enviando"] = None
+    cuerpo = json.dumps({"params": "now"}).encode()
+    sin_cert = ssl.create_default_context()
+    sin_cert.check_hostname = False
+    sin_cert.verify_mode = ssl.CERT_NONE   # el aparato usa un certificado propio
+    ultimo = None
+    for url in ("https://%s:8443/setup/reboot" % host, "http://%s:8008/setup/reboot" % host):
+        try:
+            req = urllib.request.Request(url, data=cuerpo, method="POST",
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=8,
+                                        context=sin_cert if url.startswith("https") else None) as r:
+                logging.info("Reinicio de %s pedido por %s: %s", nombre, url, r.status)
+                return True
+        except Exception as e:
+            ultimo = e
+            logging.info("Reiniciar %s por %s: %r", nombre, url, e)
+    raise RuntimeError(str(ultimo))
