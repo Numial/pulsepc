@@ -841,6 +841,19 @@ class Manejador(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        if self.path.split("?")[0] == "/salir":
+            # Cierra el agente (solo desde el propio PC). Sirve para actualizarlo sin
+            # tener que usar el menu del icono; luego se relanza con: schtasks /Run /TN PulsoPC
+            if not self.client_address[0].startswith("127."):
+                self._json({"error": "solo desde el PC"}, 403)
+                return
+            self._json({"ok": True})
+            def _salir():
+                time.sleep(0.3)
+                _cerrar_procesos()
+                os._exit(0)
+            threading.Thread(target=_salir, daemon=True).start()
+            return
         if self.path.split("?")[0] == "/accion":
             # Botones multimedia del movil: solo pulsan teclas multimedia, nada mas.
             try:
