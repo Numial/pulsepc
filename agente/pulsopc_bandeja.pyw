@@ -161,7 +161,6 @@ def main():
                 icon.title = ("PulsoPC · móvil conectado (%s)" % via) if ahora else "PulsoPC · esperando al móvil"
             while agente.estado["avisos"]:
                 texto = agente.estado["avisos"].pop(0)
-                logging.info(texto)
                 try:
                     icon.notify(texto, "PulsoPC")
                 except Exception:
