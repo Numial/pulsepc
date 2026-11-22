@@ -308,6 +308,110 @@ def bucle_usb(puerto_http, mantener_app=True):
         time.sleep(5)
 
 
+# ----------------------------------------------------------------- diseno --
+# El diseno (paginas, widgets y colores) se edita en http://localhost:47801/editor
+# y se guarda en pulsopc_config.json. Va dentro de cada respuesta de /stats,
+# asi que el movil lo aplica en el siguiente segundo sin reiniciar nada.
+
+TIPOS_WIDGET = ["cpu", "ram", "gpu", "temps", "red", "disco", "nucleos",
+                "gpu_detalle", "ventiladores", "reloj"]
+
+DISENO_POR_DEFECTO = {
+    "version": 1,
+    "tema": {"fondo": "#0E1116", "tarjeta": "#171B22", "acento": "#3EC7A0",
+             "secundario": "#5B9BF0", "texto": "#E6E6E6"},
+    "cabecera": True,
+    "paginas": [
+        {"nombre": "Resumen", "columnas": 3, "filas": 2, "widgets": [
+            {"tipo": "cpu", "ancho": 1, "alto": 1},
+            {"tipo": "ram", "ancho": 1, "alto": 1},
+            {"tipo": "gpu", "ancho": 1, "alto": 1},
+            {"tipo": "temps", "ancho": 1, "alto": 1},
+            {"tipo": "red", "ancho": 1, "alto": 1},
+            {"tipo": "disco", "ancho": 1, "alto": 1},
+        ]},
+        {"nombre": "Detalle", "columnas": 3, "filas": 1, "widgets": [
+            {"tipo": "nucleos", "ancho": 1, "alto": 1},
+            {"tipo": "gpu_detalle", "ancho": 1, "alto": 1},
+            {"tipo": "ventiladores", "ancho": 1, "alto": 1},
+        ]},
+    ],
+}
+
+RUTA_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsopc_config.json")
+RUTA_EDITOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor.html")
+_diseno = {"valor": None, "lock": threading.Lock()}
+
+
+def _color(v, defecto):
+    v = str(v or "")
+    if len(v) == 7 and v.startswith("#"):
+        try:
+            int(v[1:], 16)
+            return v.upper()
+        except ValueError:
+            pass
+    return defecto
+
+
+def validar_diseno(d):
+    """Devuelve un diseno limpio; lanza ValueError si no sirve."""
+    if not isinstance(d, dict):
+        raise ValueError("el diseno debe ser un objeto")
+    base = DISENO_POR_DEFECTO
+    tema_in = d.get("tema") or {}
+    tema = {k: _color(tema_in.get(k), v) for k, v in base["tema"].items()}
+    paginas = []
+    for p in (d.get("paginas") or [])[:8]:
+        cols = max(1, min(4, int(p.get("columnas", 3))))
+        filas = max(1, min(4, int(p.get("filas", 2))))
+        ws = []
+        for w in (p.get("widgets") or [])[:16]:
+            if w.get("tipo") not in TIPOS_WIDGET:
+                continue
+            ws.append({
+                "tipo": w["tipo"],
+                "ancho": max(1, min(cols, int(w.get("ancho", 1)))),
+                "alto": max(1, min(filas, int(w.get("alto", 1)))),
+                "titulo": str(w.get("titulo", ""))[:30],
+            })
+        paginas.append({"nombre": str(p.get("nombre", "Pagina"))[:20], "columnas": cols,
+                        "filas": filas, "widgets": ws})
+    if not paginas:
+        raise ValueError("hace falta al menos una pagina")
+    return {"version": int(time.time()), "tema": tema, "cabecera": bool(d.get("cabecera", True)),
+            "paginas": paginas}
+
+
+def cargar_diseno():
+    try:
+        with open(RUTA_CONFIG, encoding="utf-8") as f:
+            d = validar_diseno(json.load(f))
+    except FileNotFoundError:
+        d = validar_diseno(DISENO_POR_DEFECTO)
+    except Exception as e:
+        print("  Diseno: pulsopc_config.json no es valido (%s); uso el de por defecto." % e)
+        d = validar_diseno(DISENO_POR_DEFECTO)
+    with _diseno["lock"]:
+        _diseno["valor"] = d
+
+
+def guardar_diseno(d):
+    d = validar_diseno(d)
+    tmp = RUTA_CONFIG + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, RUTA_CONFIG)
+    with _diseno["lock"]:
+        _diseno["valor"] = d
+    return d
+
+
+def diseno_actual():
+    with _diseno["lock"]:
+        return _diseno["valor"]
+
+
 # ------------------------------------------------------------------- HTTP --
 
 PANEL_HTML = """<!doctype html><html><head><meta charset="utf-8">
@@ -334,22 +438,59 @@ setInterval(tick,1000);tick();</script></body></html>"""
 
 
 class Manejador(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path.startswith("/stats"):
-            with _ultimo["lock"]:
-                cuerpo = json.dumps(_ultimo["stats"]).encode()
-            tipo = "application/json"
-        elif self.path in ("/", "/index.html"):
-            cuerpo, tipo = PANEL_HTML.encode(), "text/html; charset=utf-8"
-        else:
-            self.send_error(404)
-            return
-        self.send_response(200)
+    def _enviar(self, codigo, cuerpo, tipo):
+        self.send_response(codigo)
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(cuerpo)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(cuerpo)
+
+    def _json(self, obj, codigo=200):
+        self._enviar(codigo, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
+                     "application/json; charset=utf-8")
+
+    def _es_local(self):
+        ip = self.client_address[0]
+        return ip.startswith("127.") or ip == "::1" or ip == ip_local()
+
+    def do_GET(self):
+        ruta = self.path.split("?")[0]
+        if ruta == "/stats":
+            with _ultimo["lock"]:
+                datos = dict(_ultimo["stats"])
+            datos["diseno"] = diseno_actual()
+            self._json(datos)
+        elif ruta == "/config":
+            self._json({"diseno": diseno_actual(), "tipos": TIPOS_WIDGET,
+                        "por_defecto": validar_diseno(DISENO_POR_DEFECTO)})
+        elif ruta == "/editor":
+            try:
+                with open(RUTA_EDITOR, "rb") as f:
+                    self._enviar(200, f.read(), "text/html; charset=utf-8")
+            except OSError:
+                self.send_error(404, "No encuentro editor.html junto al agente")
+        elif ruta in ("/", "/index.html"):
+            self._enviar(200, PANEL_HTML.encode(), "text/html; charset=utf-8")
+        else:
+            self.send_error(404)
+
+    def do_POST(self):
+        if self.path.split("?")[0] != "/config":
+            self.send_error(404)
+            return
+        # Solo se puede cambiar el diseno desde el propio PC.
+        if not self._es_local():
+            self._json({"error": "El diseno solo se puede cambiar desde el PC"}, 403)
+            return
+        try:
+            n = int(self.headers.get("Content-Length", "0"))
+            if n > 200000:
+                raise ValueError("demasiado grande")
+            d = guardar_diseno(json.loads(self.rfile.read(n).decode("utf-8")))
+            self._json({"ok": True, "diseno": d})
+        except Exception as e:
+            self._json({"error": str(e)}, 400)
 
     def log_message(self, *a):
         pass
@@ -374,6 +515,7 @@ def main():
                     help="no volver a abrir la app del movil si se cierra (por USB)")
     a = ap.parse_args()
 
+    cargar_diseno()
     threading.Thread(target=bucle_muestreo, args=(a.intervalo,), daemon=True).start()
     threading.Thread(target=bucle_anuncio, args=(a.puerto,), daemon=True).start()
     threading.Thread(target=bucle_usb, args=(a.puerto, not a.no_mantener_app), daemon=True).start()
@@ -381,6 +523,7 @@ def main():
     srv = ThreadingHTTPServer(("0.0.0.0", a.puerto), Manejador)
     print("PulsoPC agente en marcha.")
     print("  Panel web: http://%s:%d/" % (ip_local(), a.puerto))
+    print("  Personalizar el movil: http://localhost:%d/editor" % a.puerto)
     print("  Wi-Fi: la app del movil lo encontrara sola en la misma red.")
     try:
         srv.serve_forever()

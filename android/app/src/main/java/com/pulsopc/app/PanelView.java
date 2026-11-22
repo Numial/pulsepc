@@ -15,15 +15,27 @@ import java.util.Locale;
 
 /**
  * Panel dibujado a mano con Canvas (sin librerias), para que vaya fluido
- * en moviles antiguos. Seis tarjetas: CPU, RAM, GPU, temperaturas, red y disco.
- * En horizontal 3x2, en vertical 2x3.
+ * en moviles antiguos. Las paginas, widgets y colores vienen del "diseno"
+ * que se edita en el PC (http://localhost:47801/editor) y llega con cada /stats.
  */
 public class PanelView extends View {
 
-    // Paleta propia: fondo grafito, acento verde agua, aviso ambar, alerta coral.
-    static final int FONDO = 0xFF0E1116, TARJETA = 0xFF171B22, PISTA = 0xFF2A303A;
-    static final int TEXTO = 0xFFE6E6E6, TENUE = 0xFF8C96A4;
-    static final int ACENTO = 0xFF3EC7A0, SECUNDARIO = 0xFF5B9BF0, AVISO = 0xFFF2B33D, ALERTA = 0xFFF0645B;
+    // Colores del tema (se cambian desde el editor del PC). Aviso y alerta son fijos.
+    private int FONDO = 0xFF0E1116, TARJETA = 0xFF171B22, PISTA = 0x22E6E6E6;
+    private int TEXTO = 0xFFE6E6E6, TENUE = 0x99E6E6E6;
+    private int ACENTO = 0xFF3EC7A0, SECUNDARIO = 0xFF5B9BF0;
+    static final int AVISO = 0xFFF2B33D, ALERTA = 0xFFF0645B;
+
+    /** Pagina por defecto si el agente es antiguo y no manda diseno. */
+    private static final String DISENO_BASE = "{\"cabecera\":true,\"paginas\":["
+            + "{\"columnas\":3,\"filas\":2,\"widgets\":[{\"tipo\":\"cpu\"},{\"tipo\":\"ram\"},{\"tipo\":\"gpu\"},"
+            + "{\"tipo\":\"temps\"},{\"tipo\":\"red\"},{\"tipo\":\"disco\"}]},"
+            + "{\"columnas\":3,\"filas\":1,\"widgets\":[{\"tipo\":\"nucleos\"},{\"tipo\":\"gpu_detalle\"},{\"tipo\":\"ventiladores\"}]}]}";
+
+    private JSONArray paginas;
+    private boolean cabecera = true;
+    private long versionDiseno = -1;
+    private String tituloActual = "";
 
     private static final int N = 60; // muestras de historico (1 por segundo)
 
@@ -41,13 +53,14 @@ public class PanelView extends View {
     private final float[] histCpu = new float[N], histGpu = new float[N];
     private final float[] histBajada = new float[N], histSubida = new float[N];
     private int cabeza;
-    private int pagina;               // 0 = resumen, 1 = detalle
+    private int pagina;
     private String conexion = "";
 
     public void setConexion(String c) { conexion = c; }
 
     public void siguientePagina() {
-        pagina = (pagina + 1) % 2;
+        int n = paginas != null ? paginas.length() : 1;
+        pagina = (pagina + 1) % Math.max(1, n);
         invalidate();
     }
 
@@ -58,6 +71,32 @@ public class PanelView extends View {
         pTrazo.setStrokeCap(Paint.Cap.ROUND);
         pTexto.setTypeface(Typeface.create("sans-serif-condensed", Typeface.NORMAL));
         setLongClickable(true);
+        try { aplicarDiseno(new JSONObject(DISENO_BASE)); } catch (Exception ignorado) { }
+    }
+
+    private static int color(JSONObject t, String k, int defecto) {
+        try {
+            String v = t.optString(k, "");
+            if (v.length() == 7 && v.charAt(0) == '#') return 0xFF000000 | Integer.parseInt(v.substring(1), 16);
+        } catch (Exception ignorado) { }
+        return defecto;
+    }
+
+    private void aplicarDiseno(JSONObject d) {
+        JSONObject t = d.optJSONObject("tema");
+        if (t != null) {
+            FONDO = color(t, "fondo", FONDO);
+            TARJETA = color(t, "tarjeta", TARJETA);
+            ACENTO = color(t, "acento", ACENTO);
+            SECUNDARIO = color(t, "secundario", SECUNDARIO);
+            TEXTO = color(t, "texto", TEXTO);
+            TENUE = (TEXTO & 0x00FFFFFF) | 0x99000000;
+            PISTA = (TEXTO & 0x00FFFFFF) | 0x22000000;
+        }
+        cabecera = d.optBoolean("cabecera", true);
+        JSONArray p = d.optJSONArray("paginas");
+        if (p != null && p.length() > 0) paginas = p;
+        if (paginas != null && pagina >= paginas.length()) pagina = 0;
     }
 
     public boolean conectado() {
@@ -76,6 +115,11 @@ public class PanelView extends View {
         histGpu[cabeza] = gpu != null ? (float) gpu.optDouble("uso", 0) : 0;
         histBajada[cabeza] = red != null ? (float) red.optDouble("bajada_kbs", 0) : 0;
         histSubida[cabeza] = red != null ? (float) red.optDouble("subida_kbs", 0) : 0;
+        JSONObject d = datos.optJSONObject("diseno");
+        if (d != null && d.optLong("version", 0) != versionDiseno) {
+            versionDiseno = d.optLong("version", 0);
+            aplicarDiseno(d);   // cambio hecho en el editor del PC: se aplica al momento
+        }
         invalidate();
     }
 
@@ -97,9 +141,10 @@ public class PanelView extends View {
         int w = getWidth(), h = getHeight();
         c.drawColor(FONDO);
         float m = 8 * dp;
-        float alturaCab = 28 * dp;
+        boolean conCab = cabecera || s == null;
+        float alturaCab = conCab ? 28 * dp : 0;
 
-        dibujarCabecera(c, m, m, w - 2 * m, alturaCab);
+        if (conCab) dibujarCabecera(c, m, m, w - 2 * m, alturaCab);
 
         if (s == null) {
             pTexto.setColor(TENUE);
@@ -111,45 +156,97 @@ public class PanelView extends View {
             return;
         }
 
-        boolean horizontal = w > h;
-        float top = m + alturaCab + m;
-        if (pagina == 0) {
-            int cols = horizontal ? 3 : 2, filas = horizontal ? 2 : 3;
-            rejilla(c, w, h, top, m, cols, filas, 6, 0);
-        } else {
-            int cols = horizontal ? 3 : 1, filas = horizontal ? 1 : 3;
-            rejilla(c, w, h, top, m, cols, filas, 3, 6);
-        }
+        float top = conCab ? m + alturaCab + m : m;
+        int n = paginas != null ? paginas.length() : 0;
+        if (n == 0) return;
+        if (pagina >= n) pagina = 0;
+        dibujarPagina(c, paginas.optJSONObject(pagina), w, h, top, m, w < h, n > 1);
         // Puntos de pagina
-        for (int i = 0; i < 2; i++) {
-            pRelleno.setColor(i == pagina ? TEXTO : PISTA);
-            c.drawCircle(w / 2f + (i - 0.5f) * 12 * dp, h - 4 * dp, 2.5f * dp, pRelleno);
+        if (n > 1) {
+            for (int i = 0; i < n; i++) {
+                pRelleno.setColor(i == pagina ? TEXTO : PISTA);
+                c.drawCircle(w / 2f + (i - (n - 1) / 2f) * 12 * dp, h - 4 * dp, 2.5f * dp, pRelleno);
+            }
         }
     }
 
-    private void rejilla(Canvas c, int w, int h, float top, float m, int cols, int filas, int n, int primera) {
-        float tw = (w - m * (cols + 1)) / cols;
-        float th = (h - top - m * filas - 4 * dp) / filas;
-        for (int i = 0; i < n; i++) {
-            float x = m + (i % cols) * (tw + m);
-            float y = top + (i / cols) * (th + m);
+    /**
+     * Coloca los widgets en la rejilla igual que el editor del PC: en orden,
+     * en el primer hueco donde quepan. En vertical se gira la rejilla.
+     */
+    private void dibujarPagina(Canvas c, JSONObject p, int w, int h, float top, float m,
+                               boolean girar, boolean conPuntos) {
+        if (p == null) return;
+        int cols = Math.max(1, Math.min(4, p.optInt("columnas", 3)));
+        int filas = Math.max(1, Math.min(4, p.optInt("filas", 2)));
+        if (girar && cols > filas) { int t = cols; cols = filas; filas = t; } else girar = false;
+        JSONArray ws = p.optJSONArray("widgets");
+        if (ws == null) return;
+        boolean[][] ocupado = new boolean[filas][cols];
+        float pie = conPuntos ? 6 * dp : 0;
+        float cw = (w - m * (cols + 1)) / cols;
+        float ch = (h - top - m * filas - pie) / filas;
+        for (int i = 0; i < ws.length(); i++) {
+            JSONObject wd = ws.optJSONObject(i);
+            if (wd == null) continue;
+            int an = wd.optInt("ancho", 1), al = wd.optInt("alto", 1);
+            if (girar) { int t = an; an = al; al = t; }
+            an = Math.max(1, Math.min(cols, an));
+            al = Math.max(1, Math.min(filas, al));
+            int ff = -1, cc = -1;
+            buscar:
+            for (int f = 0; f <= filas - al; f++) {
+                for (int col = 0; col <= cols - an; col++) {
+                    boolean libre = true;
+                    for (int y = f; y < f + al && libre; y++)
+                        for (int x = col; x < col + an; x++)
+                            if (ocupado[y][x]) { libre = false; break; }
+                    if (libre) { ff = f; cc = col; break buscar; }
+                }
+            }
+            if (ff < 0) continue; // no cabe
+            for (int y = ff; y < ff + al; y++)
+                for (int x = cc; x < cc + an; x++) ocupado[y][x] = true;
+            float x = m + cc * (cw + m), y = top + ff * (ch + m);
+            float tw = cw * an + m * (an - 1), th = ch * al + m * (al - 1);
             r.set(x, y, x + tw, y + th);
             pRelleno.setColor(TARJETA);
             c.drawRoundRect(r, 10 * dp, 10 * dp, pRelleno);
-            float p = 10 * dp;
-            float ix = x + p, iy = y + p, iw = tw - 2 * p, ih = th - 2 * p;
-            switch (primera + i) {
-                case 0: tarjetaCpu(c, ix, iy, iw, ih); break;
-                case 1: tarjetaRam(c, ix, iy, iw, ih); break;
-                case 2: tarjetaGpu(c, ix, iy, iw, ih); break;
-                case 3: tarjetaTemps(c, ix, iy, iw, ih); break;
-                case 4: tarjetaRed(c, ix, iy, iw, ih); break;
-                case 5: tarjetaDisco(c, ix, iy, iw, ih); break;
-                case 6: tarjetaNucleos(c, ix, iy, iw, ih); break;
-                case 7: tarjetaGpuDetalle(c, ix, iy, iw, ih); break;
-                case 8: tarjetaVentiladores(c, ix, iy, iw, ih); break;
-            }
+            float pd = 10 * dp;
+            tituloActual = wd.optString("titulo", "");
+            dibujarWidget(c, wd.optString("tipo", ""), x + pd, y + pd, tw - 2 * pd, th - 2 * pd);
         }
+        tituloActual = "";
+    }
+
+    private void dibujarWidget(Canvas c, String tipo, float ix, float iy, float iw, float ih) {
+        switch (tipo) {
+            case "cpu": tarjetaCpu(c, ix, iy, iw, ih); break;
+            case "ram": tarjetaRam(c, ix, iy, iw, ih); break;
+            case "gpu": tarjetaGpu(c, ix, iy, iw, ih); break;
+            case "temps": tarjetaTemps(c, ix, iy, iw, ih); break;
+            case "red": tarjetaRed(c, ix, iy, iw, ih); break;
+            case "disco": tarjetaDisco(c, ix, iy, iw, ih); break;
+            case "nucleos": tarjetaNucleos(c, ix, iy, iw, ih); break;
+            case "gpu_detalle": tarjetaGpuDetalle(c, ix, iy, iw, ih); break;
+            case "ventiladores": tarjetaVentiladores(c, ix, iy, iw, ih); break;
+            case "reloj": tarjetaReloj(c, ix, iy, iw, ih); break;
+        }
+    }
+
+    private void tarjetaReloj(Canvas c, float x, float y, float w, float h) {
+        titulo(c, "Reloj", x, y);
+        java.util.Date ahora = new java.util.Date();
+        String hora = new java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora);
+        String fecha = new java.text.SimpleDateFormat("EEEE d MMMM", new Locale("es", "ES")).format(ahora);
+        pTexto.setTextAlign(Paint.Align.CENTER);
+        pTexto.setColor(TEXTO);
+        float tam = Math.min(h * 0.5f, w / 3.2f);
+        pTexto.setTextSize(tam);
+        c.drawText(hora, x + w / 2, y + h / 2 + tam * 0.3f, pTexto);
+        pTexto.setColor(TENUE);
+        pTexto.setTextSize(Math.max(11 * dp, tam * 0.2f));
+        c.drawText(fecha, x + w / 2, y + h / 2 + tam * 0.3f + tam * 0.35f, pTexto);
     }
 
     private void dibujarCabecera(Canvas c, float x, float y, float w, float h) {
@@ -173,6 +270,7 @@ public class PanelView extends View {
     }
 
     private void titulo(Canvas c, String t, float x, float y) {
+        if (tituloActual != null && !tituloActual.isEmpty()) t = tituloActual;
         pTexto.setTextAlign(Paint.Align.LEFT);
         pTexto.setColor(TENUE);
         pTexto.setTextSize(12 * dp);
@@ -455,7 +553,7 @@ public class PanelView extends View {
 
     // --------------------------------------------------------------- formato --
 
-    private static int colorPorNivel(float v, float aviso, float alerta) {
+    private int colorPorNivel(float v, float aviso, float alerta) {
         return v >= alerta ? ALERTA : v >= aviso ? AVISO : ACENTO;
     }
 

@@ -32,6 +32,16 @@ Requiere Python 3.8+.
 
 La app prueba primero el USB y, si no hay cable, usa la Wi‑Fi. Arriba se ve por dónde está conectada.
 
+### Personalizar lo que se ve en el móvil
+
+Con el agente abierto, abre **`agente/personalizar.bat`** (o `http://localhost:47801/editor` en el navegador del PC).
+
+- Crea páginas y elige cuántas columnas y filas tiene cada una (hasta 4×4).
+- Añade widgets (CPU, memoria, GPU, GPU detalle, temperaturas, núcleos, red, discos, ventiladores y consumo, reloj), arrástralos para ordenarlos y cambia su tamaño y título.
+- Elige un tema de colores o ajusta cada color.
+- Se guarda solo en `agente/pulsopc_config.json` y el móvil lo aplica en un segundo, sin reiniciar nada.
+- Por seguridad, el diseño solo se puede cambiar desde el propio PC.
+
 ### Móvil fijo dentro del PC
 
 - **Arranque del agente con Windows:** ejecuta una vez `agente/arrancar_con_windows.bat`.
