@@ -35,6 +35,8 @@ rem (PY puede venir entre comillas, asi que no se compara su texto: se usa la ma
 set "PYW=%PY:python.exe=pythonw.exe%"
 if defined LANZADOR set "PYW=pyw -3"
 
+rem Si ya esta todo instalado, no hace falta pip (asi abrir PulsePC es instantaneo).
+%PY% -c "import psutil, pystray, PIL, pychromecast" >nul 2>nul && goto arrancar
 echo Preparando PulsePC (solo la primera vez tarda un poco)...
 %PY% -m pip install --quiet --disable-pip-version-check psutil pystray pillow pychromecast
 if errorlevel 1 (
@@ -42,6 +44,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+:arrancar
 rem Arranca en segundo plano: aparece el icono junto al reloj y esta ventana se cierra.
 rem Windows pedira permiso de administrador una vez (para leer la temperatura de la CPU).
 start "" %PYW% "%~dp0pulsopc_bandeja.pyw" --elevar
