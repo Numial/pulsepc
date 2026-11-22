@@ -234,6 +234,9 @@ def buscar_adb():
             c = os.path.join(base, *sub, "adb.exe" if platform.system() == "Windows" else "adb")
             if os.path.isfile(c):
                 return c
+    bw = os.path.join(os.path.expanduser("~"), ".bubblewrap", "android_sdk", "platform-tools", "adb.exe")
+    if os.path.isfile(bw):
+        return bw
     junto = os.path.join(os.path.dirname(os.path.abspath(__file__)), "platform-tools", "adb.exe")
     return junto if os.path.isfile(junto) else None
 
