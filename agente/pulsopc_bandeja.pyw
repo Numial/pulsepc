@@ -308,8 +308,9 @@ def main():
         if not cast.disponible():
             yield pystray.MenuItem("Falta instalar pychromecast (abre iniciar_agente.bat)", None, enabled=False)
             return
-        if est["enviando"]:
-            yield pystray.MenuItem("Dejar de enviar a %s" % est["enviando"], dejar_de_enviar)
+        actual = cast.mostrando()
+        if actual:
+            yield pystray.MenuItem("Dejar de enviar a %s" % actual, dejar_de_enviar)
             yield pystray.Menu.SEPARATOR
         for p in est["pantallas"]:
             yield pystray.MenuItem("Enviar a %s" % p["nombre"], enviar_a(p["uuid"]),
@@ -329,7 +330,7 @@ def main():
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Personalizar el móvil", lambda i, it: webbrowser.open(url + "/editor"), default=True),
         pystray.MenuItem("Ver panel web", lambda i, it: webbrowser.open(url + "/pantalla")),
-        pystray.MenuItem(lambda it: ("Nest Hub: enviando a %s" % cast.estado["enviando"]) if cast.estado["enviando"]
+        pystray.MenuItem(lambda it: ("Nest Hub: enviando a %s" % cast.mostrando()) if cast.mostrando()
                          else "Enviar al Nest Hub", pystray.Menu(opciones_pantalla)),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Arrancar con Windows", alternar_arranque,

@@ -63,6 +63,13 @@ def buscar(espera=6):
                 continue
             uuid = str(info.uuid)
             _casts[uuid] = c
+            # Conectar en segundo plano para saber si ya muestra PulsePC (p. ej. tras reiniciar
+            # el agente) y poder ofrecer "Dejar de enviar". No envia nada.
+            try:
+                if not c.socket_client.is_alive():
+                    c.start()
+            except Exception:
+                pass
             pantallas.append({"nombre": info.friendly_name or "Pantalla", "modelo": info.model_name or "",
                               "uuid": uuid})
         # Primero los Nest Hub, luego el resto (Chromecast con tele, etc.).
@@ -128,18 +135,28 @@ def _vigilar(cast):
                 return
 
 
+def mostrando():
+    """Nombre de la pantalla que muestra PulsePC ahora (aunque lo haya enviado otro programa)."""
+    if estado["enviando"]:
+        return estado["enviando"]
+    for c in list(_casts.values()):
+        try:
+            if c.status and c.status.app_id == APP_DASHCAST:
+                return c.cast_info.friendly_name or "Pantalla"
+        except Exception:
+            pass
+    return None
+
+
 def parar():
-    """Deja de enviar y cierra PulsePC en la pantalla."""
+    """Deja de enviar y cierra PulsePC en la pantalla (en todas las que lo muestren)."""
     _parar.set()
     nombre = estado["enviando"]
     estado["enviando"] = None
-    if not nombre:
-        return
     for c in list(_casts.values()):
-        if (c.cast_info.friendly_name or "Pantalla") == nombre:
-            try:
-                if c.status and c.status.app_id == APP_DASHCAST:
-                    c.quit_app()
-            except Exception as e:
-                logging.info("No pude cerrar la pantalla: %s", e)
-    logging.info("Dejo de enviar a %s", nombre)
+        try:
+            if c.status and c.status.app_id == APP_DASHCAST:
+                c.quit_app()
+                logging.info("Dejo de enviar a %s", c.cast_info.friendly_name)
+        except Exception as e:
+            logging.info("No pude cerrar la pantalla %s: %s", nombre or "", e)
