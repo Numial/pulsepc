@@ -93,7 +93,14 @@ def enviar(uuid, url):
         raise RuntimeError("No encuentro esa pantalla; vuelve a buscar.")
     parar()
     _url["v"] = url
-    _abrir(cast, url)
+    try:
+        _abrir(cast, url)
+    except Exception as e:
+        logging.info("Enviar a %s: %r", cast.cast_info.friendly_name, e)
+        if "Timeout" in type(e).__name__ or "timed out" in str(e).lower():
+            raise RuntimeError("%s no responde. Reinícialo (desenchúfalo 10 s) y vuelve a probar."
+                               % (cast.cast_info.friendly_name or "La pantalla"))
+        raise
     estado["enviando"] = cast.cast_info.friendly_name or "Pantalla"
     estado["error"] = ""
     _parar.clear()
