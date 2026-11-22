@@ -34,7 +34,7 @@ PUERTO_HTTP = 47801
 PUERTO_DESCUBRIMIENTO = 47800
 LHM_URL = "http://127.0.0.1:8085/data.json"
 
-_ultimo = {"stats": {}, "lock": threading.Lock(), "pedido": 0.0}
+_ultimo = {"stats": {}, "lock": threading.Lock(), "pedido": 0.0, "via": ""}
 
 # Estado para el icono de la bandeja
 estado = {"usb": set(), "avisos": []}
@@ -49,6 +49,11 @@ def avisar(texto):
 def movil_conectado():
     """Hay un movil leyendo datos (por USB o Wi-Fi) en los ultimos 5 s."""
     return time.time() - _ultimo["pedido"] < 5
+
+
+def via_movil():
+    """Por donde lee el movil ahora mismo: "USB" o "Wi-Fi" ("" si no hay movil)."""
+    return _ultimo["via"] if movil_conectado() else ""
 
 
 # ---------------------------------------------------------------- lectores --
@@ -828,7 +833,16 @@ class Manejador(BaseHTTPRequestHandler):
     def do_GET(self):
         ruta = self.path.split("?")[0]
         if ruta == "/stats":
-            _ultimo["pedido"] = time.time()
+            # Por USB (adb reverse) el movil llega como 127.0.0.1; por Wi-Fi, con su IP.
+            # El editor y el panel web abiertos en el propio PC tambien piden /stats desde
+            # 127.0.0.1, pero son navegadores ("Mozilla" en el User-Agent; la app usa el
+            # cliente de Android, "Dalvik"): esos no cuentan como movil conectado.
+            ip = self.client_address[0]
+            local = ip.startswith("127.") or ip == "::1"
+            del_pc = local or ip == ip_local()
+            if not (del_pc and "Mozilla" in self.headers.get("User-Agent", "")):
+                _ultimo["pedido"] = time.time()
+                _ultimo["via"] = "USB" if local else "Wi-Fi"
             with _ultimo["lock"]:
                 datos = dict(_ultimo["stats"])
             datos["diseno"] = diseno_actual()

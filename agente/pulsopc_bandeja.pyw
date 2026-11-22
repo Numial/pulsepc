@@ -288,12 +288,15 @@ def main():
     def vigilar():
         conectado = None
         while True:
-            ahora = agente.movil_conectado()
-            if ahora != conectado:
-                conectado = ahora
-                icon.icon = ICONO_ON if ahora else ICONO_OFF
-                via = "USB" if agente.estado["usb"] else "Wi-Fi"
-                icon.title = ("PulsePC · móvil conectado (%s)" % via) if ahora else "PulsePC · esperando al móvil"
+            # El metodo sale de por donde llegan de verdad las peticiones del movil, y se
+            # revisa cada segundo: antes se decidia una sola vez al conectar (con la lista
+            # de adb, que aun podia estar vacia) y se quedaba en "Wi-Fi" aunque fuera por cable.
+            via = agente.via_movil()
+            if via != conectado:
+                conectado = via
+                icon.icon = ICONO_ON if via else ICONO_OFF
+                icon.title = ("PulsePC · móvil conectado (%s)" % via) if via else "PulsePC · esperando al móvil"
+                logging.info(icon.title)
             while agente.estado["avisos"]:
                 texto = agente.estado["avisos"].pop(0)
                 try:
