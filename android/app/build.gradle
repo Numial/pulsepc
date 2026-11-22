@@ -1,0 +1,29 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.pulsopc.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.pulsopc.app'
+        minSdk 23          // Android 6.0 Marshmallow
+        targetSdk 34
+        versionCode 1
+        versionName '0.1'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+// Sin dependencias externas: solo APIs de Android, para que funcione igual en Android 6.

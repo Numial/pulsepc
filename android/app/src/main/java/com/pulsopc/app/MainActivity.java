@@ -1,0 +1,215 @@
+package com.pulsopc.app;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.SharedPreferences;
+import android.net.wifi.WifiManager;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.InputType;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.EditText;
+import android.widget.Toast;
+
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.SocketTimeoutException;
+import java.net.URL;
+
+/**
+ * Pantalla unica: busca el agente del PC en la Wi-Fi (o usa la IP guardada),
+ * pide /stats cada segundo y lo dibuja en PanelView.
+ * Mantener pulsado el panel abre el ajuste manual de IP.
+ */
+public class MainActivity extends Activity {
+
+    static final int PUERTO_DESCUBRIMIENTO = 47800;
+    static final int PUERTO_HTTP = 47801;
+    static final long INTERVALO_MS = 1000;
+
+    private PanelView panel;
+    private SharedPreferences prefs;
+    private final Handler ui = new Handler(Looper.getMainLooper());
+
+    private volatile String host;          // "192.168.1.20:47801"
+    private volatile boolean activo;
+    private Thread hiloSondeo, hiloDescubrir;
+    private WifiManager.MulticastLock multicastLock;
+
+    @Override
+    protected void onCreate(Bundle b) {
+        super.onCreate(b);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        panel = new PanelView(this);
+        setContentView(panel);
+        prefs = getSharedPreferences("pulsopc", MODE_PRIVATE);
+        host = prefs.getString("host", null);
+
+        panel.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override public boolean onLongClick(View v) { pedirIp(); return true; }
+        });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        ocultarBarras();
+        activo = true;
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wm != null) {
+            multicastLock = wm.createMulticastLock("pulsopc");
+            multicastLock.setReferenceCounted(false);
+            multicastLock.acquire();
+        }
+        hiloDescubrir = new Thread(new Runnable() { public void run() { bucleDescubrir(); } }, "descubrir");
+        hiloSondeo = new Thread(new Runnable() { public void run() { bucleSondeo(); } }, "sondeo");
+        hiloDescubrir.start();
+        hiloSondeo.start();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        activo = false;
+        if (hiloSondeo != null) hiloSondeo.interrupt();
+        if (hiloDescubrir != null) hiloDescubrir.interrupt();
+        if (multicastLock != null && multicastLock.isHeld()) multicastLock.release();
+    }
+
+    private void ocultarBarras() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+    }
+
+    // ------------------------------------------------------- descubrimiento --
+
+    /** Escucha los anuncios UDP del agente y guarda su IP. */
+    private void bucleDescubrir() {
+        DatagramSocket s = null;
+        try {
+            s = new DatagramSocket(null);
+            s.setReuseAddress(true);
+            s.setBroadcast(true);
+            s.bind(new InetSocketAddress(PUERTO_DESCUBRIMIENTO));
+            s.setSoTimeout(1000);
+            byte[] buf = new byte[1024];
+            while (activo) {
+                DatagramPacket p = new DatagramPacket(buf, buf.length);
+                try {
+                    s.receive(p);
+                } catch (SocketTimeoutException e) {
+                    continue;
+                }
+                try {
+                    JSONObject j = new JSONObject(new String(p.getData(), 0, p.getLength(), "UTF-8"));
+                    if (!"pulsopc".equals(j.optString("app"))) continue;
+                    String nuevo = p.getAddress().getHostAddress() + ":" + j.optInt("puerto", PUERTO_HTTP);
+                    // Solo adoptamos el anuncio si no tenemos host o el actual no responde.
+                    if (host == null || !panel.conectado()) {
+                        host = nuevo;
+                        prefs.edit().putString("host", nuevo).apply();
+                    }
+                } catch (Exception ignorado) { }
+            }
+        } catch (Exception e) {
+            // Sin descubrimiento automatico: queda la IP manual.
+        } finally {
+            if (s != null) s.close();
+        }
+    }
+
+    // --------------------------------------------------------------- sondeo --
+
+    private void bucleSondeo() {
+        while (activo) {
+            long t0 = System.currentTimeMillis();
+            final String h = host;
+            if (h == null) {
+                publicar(null, "Buscando el PC en la Wi-Fi...\nMantén pulsado para escribir la IP.");
+            } else {
+                try {
+                    JSONObject j = new JSONObject(pedir("http://" + h + "/stats"));
+                    if (j.has("cpu")) publicar(j, null);
+                    else publicar(null, "Conectado a " + h + ", esperando datos...");
+                } catch (Exception e) {
+                    publicar(null, "Sin respuesta de " + h + "\nMantén pulsado para cambiar la IP.");
+                }
+            }
+            long espera = INTERVALO_MS - (System.currentTimeMillis() - t0);
+            if (espera > 0) {
+                try { Thread.sleep(espera); } catch (InterruptedException e) { return; }
+            }
+        }
+    }
+
+    private static String pedir(String url) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setConnectTimeout(1500);
+        c.setReadTimeout(1500);
+        c.setUseCaches(false);
+        try {
+            InputStream in = c.getInputStream();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] b = new byte[8192];
+            int n;
+            while ((n = in.read(b)) > 0) out.write(b, 0, n);
+            return out.toString("UTF-8");
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    private void publicar(final JSONObject datos, final String aviso) {
+        ui.post(new Runnable() {
+            @Override public void run() {
+                if (datos != null) panel.actualizar(datos);
+                else panel.aviso(aviso);
+            }
+        });
+    }
+
+    // ------------------------------------------------------------ IP manual --
+
+    private void pedirIp() {
+        final EditText campo = new EditText(this);
+        campo.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        campo.setHint("192.168.1.20:" + PUERTO_HTTP);
+        if (host != null) campo.setText(host);
+        new AlertDialog.Builder(this)
+                .setTitle("IP del PC")
+                .setMessage("La ves en la ventana del agente al arrancarlo.")
+                .setView(campo)
+                .setPositiveButton("Guardar", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        String v = campo.getText().toString().trim();
+                        if (v.startsWith("http://")) v = v.substring(7);
+                        if (v.endsWith("/")) v = v.substring(0, v.length() - 1);
+                        if (v.isEmpty()) return;
+                        if (!v.contains(":")) v = v + ":" + PUERTO_HTTP;
+                        host = v;
+                        prefs.edit().putString("host", v).apply();
+                        Toast.makeText(MainActivity.this, "Conectando a " + v, Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                    @Override public void onDismiss(DialogInterface d) { ocultarBarras(); }
+                })
+                .show();
+    }
+}
