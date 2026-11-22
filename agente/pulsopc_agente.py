@@ -237,6 +237,13 @@ def buscar_adb():
     bw = os.path.join(os.path.expanduser("~"), ".bubblewrap", "android_sdk", "platform-tools", "adb.exe")
     if os.path.isfile(bw):
         return bw
+    import glob
+    casa = os.path.expanduser("~")
+    for patron in (os.path.join(casa, "scrcpy*", "adb.exe"), os.path.join(casa, "Downloads", "scrcpy*", "adb.exe"),
+                   os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "scrcpy*", "adb.exe")):
+        hallados = glob.glob(patron)
+        if hallados:
+            return hallados[0]
     junto = os.path.join(os.path.dirname(os.path.abspath(__file__)), "platform-tools", "adb.exe")
     return junto if os.path.isfile(junto) else None
 
