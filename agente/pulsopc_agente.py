@@ -287,7 +287,12 @@ def bucle_usb(puerto_http, mantener_app=True):
         try:
             out = subprocess.run([adb, "devices"], capture_output=True, text=True,
                                  timeout=5, creationflags=flags).stdout
-            serials = [l.split()[0] for l in out.splitlines()[1:] if l.strip().endswith("device")]
+            lineas = out.splitlines()[1:]
+            if any(l.strip().endswith("offline") for l in lineas):
+                # El movil se queda "offline" a veces tras un microcorte del cable.
+                subprocess.run([adb, "reconnect", "offline"], capture_output=True,
+                               timeout=5, creationflags=flags)
+            serials = [l.split()[0] for l in lineas if l.strip().endswith("device")]
             for sn in serials:
                 sh(sn, "reverse", regla, regla)
                 if sn not in conocidos:
