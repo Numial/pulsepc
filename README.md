@@ -32,6 +32,13 @@ Requiere Python 3.8+.
 
 La app prueba primero el USB y, si no hay cable, usa la Wi‑Fi. Arriba se ve por dónde está conectada.
 
+### Móvil fijo dentro del PC
+
+- **Arranque del agente con Windows:** ejecuta una vez `agente/arrancar_con_windows.bat`.
+- **La app se abre sola** al encender el móvil y al recibir corriente por el cable (al encender el PC).
+- **Por USB, el agente además** enciende la pantalla, la mantiene encendida mientras haya cable y vuelve a abrir la app si se cierra. Para desactivar esto último: `pulsopc_agente.py --no-mantener-app`.
+- Quita el PIN o patrón de bloqueo del móvil (pon *Ninguno* o *Deslizar*) para que la app se vea sin desbloquear.
+
 ## 2. App Android
 
 - Java puro, sin librerías externas, `minSdk 23` (Android 6.0).

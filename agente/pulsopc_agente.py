@@ -248,11 +248,16 @@ def buscar_adb():
     return junto if os.path.isfile(junto) else None
 
 
-def bucle_usb(puerto_http):
+APP_ACTIVIDAD = "com.pulsopc.app/.MainActivity"
+
+
+def bucle_usb(puerto_http, mantener_app=True):
     """Conexion por cable: con 'adb reverse' el movil ve el agente en 127.0.0.1.
 
     Requiere la depuracion USB activada en el movil. Se repite cada 5 s para
-    cubrir conexiones y desconexiones del cable.
+    cubrir conexiones y desconexiones del cable. Al conectar un movil:
+    enciende la pantalla, la deja encendida mientras haya USB y abre la app.
+    Con mantener_app, si la app deja de estar delante, la vuelve a abrir.
     """
     adb = buscar_adb()
     if not adb:
@@ -260,19 +265,39 @@ def bucle_usb(puerto_http):
         return
     flags = 0x08000000 if platform.system() == "Windows" else 0
     regla = "tcp:%d" % puerto_http
-    avisado = set()
+
+    def sh(sn, *args):
+        return subprocess.run([adb, "-s", sn] + list(args), capture_output=True, text=True,
+                              timeout=5, creationflags=flags).stdout
+
+    def abrir_app(sn):
+        sh(sn, "shell", "input", "keyevent", "KEYCODE_WAKEUP")
+        sh(sn, "shell", "wm", "dismiss-keyguard")
+        sh(sn, "shell", "am", "start", "-n", APP_ACTIVIDAD)
+
+    def app_delante(sn):
+        out = sh(sn, "shell", "dumpsys", "window", "windows")
+        for linea in out.splitlines():
+            if "mCurrentFocus" in linea or "mFocusedApp" in linea:
+                return "com.pulsopc.app" in linea
+        return True  # si no se puede saber, no molestar
+
+    conocidos = set()
     while True:
         try:
             out = subprocess.run([adb, "devices"], capture_output=True, text=True,
                                  timeout=5, creationflags=flags).stdout
             serials = [l.split()[0] for l in out.splitlines()[1:] if l.strip().endswith("device")]
             for sn in serials:
-                subprocess.run([adb, "-s", sn, "reverse", regla, regla], capture_output=True,
-                               timeout=5, creationflags=flags)
-                if sn not in avisado:
-                    print("  USB: movil %s conectado por cable." % sn)
-                    avisado.add(sn)
-            avisado &= set(serials)
+                sh(sn, "reverse", regla, regla)
+                if sn not in conocidos:
+                    print("  USB: movil %s conectado por cable. Abriendo PulsoPC..." % sn)
+                    sh(sn, "shell", "svc", "power", "stayon", "usb")  # pantalla encendida con USB
+                    abrir_app(sn)
+                    conocidos.add(sn)
+                elif mantener_app and not app_delante(sn):
+                    abrir_app(sn)
+            conocidos &= set(serials)
         except Exception:
             pass
         time.sleep(5)
@@ -340,11 +365,13 @@ def main():
     ap = argparse.ArgumentParser(description="Agente PulsoPC")
     ap.add_argument("--puerto", type=int, default=PUERTO_HTTP)
     ap.add_argument("--intervalo", type=float, default=1.0, help="segundos entre lecturas")
+    ap.add_argument("--no-mantener-app", action="store_true",
+                    help="no volver a abrir la app del movil si se cierra (por USB)")
     a = ap.parse_args()
 
     threading.Thread(target=bucle_muestreo, args=(a.intervalo,), daemon=True).start()
     threading.Thread(target=bucle_anuncio, args=(a.puerto,), daemon=True).start()
-    threading.Thread(target=bucle_usb, args=(a.puerto,), daemon=True).start()
+    threading.Thread(target=bucle_usb, args=(a.puerto, not a.no_mantener_app), daemon=True).start()
 
     srv = ThreadingHTTPServer(("0.0.0.0", a.puerto), Manejador)
     print("PulsoPC agente en marcha.")

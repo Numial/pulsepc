@@ -51,7 +51,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // Pensado para un movil fijo dentro del PC: pantalla siempre encendida
+        // y visible por encima de la pantalla de bloqueo (sin PIN).
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
         panel = new PanelView(this);
         setContentView(panel);
         prefs = getSharedPreferences("pulsopc", MODE_PRIVATE);
