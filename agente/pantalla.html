@@ -51,7 +51,7 @@ canvas{flex:1;width:100%;min-height:0}
 var IMGS={},EN=false;
 function L(es,en){return EN?en:es}
 function LOC(){return EN?"en-GB":"es-ES"}
-var S=null,D=null,pag=0,cambio=Date.now(),hist={},HMAX=120,ultOK=0,versionD=null;
+var S=null,D=null,pag=0,cambio=Date.now(),hist={},HMAX=60,ultOK=0,versionD=null;
 function e(x){return String(x==null?"":x).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function n(x,d){return x==null||isNaN(x)?"–":Number(x).toFixed(d||0)}
 function bar(p,c){return '<div class="b"><i style="width:'+Math.max(0,Math.min(100,p||0))+'%'+(c?';background:'+c:'')+'"></i></div>'}
@@ -128,13 +128,14 @@ function pintar(){
     if(r.graf)grafs.push([k2,r.graf]);k2++;
     h+='<div class="w'+(r.a?' alerta':'')+(r.img?' img':'')+'" style="grid-column:'+(o.c+1)+' / span '+o.an+';grid-row:'+(o.f+1)+' / span '+o.al+'">'+
        ((w.titulo||r.t)?'<div class="t">'+e(w.titulo||r.t)+'</div>':'')+'<div class="c">'+r.h+'</div></div>'}
-  rj.innerHTML=h;
+  // Solo se rehace la rejilla si ha cambiado algo; asi el Nest Hub trabaja mucho menos.
+  if(h!==ultH){ultH=h;rj.innerHTML=h;
   // Las imagenes (fotos, GIF, portada) no se vuelven a crear cada segundo: se reutiliza el
   // mismo elemento para que no parpadeen ni se reinicie el GIF.
   var phs=rj.querySelectorAll(".ph");
   for(var z=0;z<phs.length;z++){var src=phs[z].getAttribute("data-src"),im=IMGS[src];
     if(!im){im=IMGS[src]=new Image();im.src=src}
-    im.style.objectFit=phs[z].getAttribute("data-ajuste")||"cover";phs[z].parentNode.replaceChild(im,phs[z])}
+    im.style.objectFit=phs[z].getAttribute("data-ajuste")||"cover";phs[z].parentNode.replaceChild(im,phs[z])}}
   for(var j=0;j<grafs.length;j++)pintarGrafica(rj.children[grafs[j][0]].querySelector("canvas"),grafs[j][1]);
   document.getElementById("cab").style.display=D.cabecera?"flex":"none";
   document.getElementById("equipo").textContent=S.equipo||"PulsePC";
@@ -151,16 +152,19 @@ function aplicarTema(){if(!D||D.version===versionD)return;versionD=D.version;var
 var FUENTES={condensada:['"Roboto Condensed",Roboto,sans-serif',400,500],moderna:['Roboto,sans-serif',400,500],
   fina:['Roboto,sans-serif',300,300],gruesa:['Roboto,sans-serif',500,900],serif:['"Noto Serif",Georgia,serif',400,600],
   mono:['"Roboto Mono",Consolas,monospace',400,500],manuscrita:['"Dancing Script",cursive',500,700],informal:['"Coming Soon",cursive',400,400]};
-var PV=null;
-function pedir(){var r=new XMLHttpRequest();r.open("GET","/stats?pantalla=1");r.timeout=4000;
+var PV=null,ultH="",INICIO=Date.now();
+// Se piden los datos cada 2 s, sin solapar peticiones (antes era cada segundo).
+function pedir(){var r=new XMLHttpRequest(),sig=function(){setTimeout(pedir,2000)};r.onerror=r.ontimeout=sig;r.open("GET","/stats?pantalla=1");r.timeout=4000;
   r.onload=function(){try{var s=JSON.parse(r.responseText);
     // PulsePC actualizado: la pagina se recarga para no seguir con el codigo antiguo.
     if(s.pagina_v){if(PV===null)PV=s.pagina_v;else if(s.pagina_v!==PV){location.reload();return}}
+    // Cada 2 h se recarga la pagina para liberar memoria del Nest Hub.
+    if(Date.now()-INICIO>7200000){location.reload();return}
     if(s.idioma)EN=s.idioma=="en";document.documentElement.lang=EN?"en":"es";
     document.getElementById("espera").textContent=L("PulsePC · esperando al PC…","PulsePC · waiting for the PC…");
-    if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar()}catch(x){}};r.send()}
+    if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar()}catch(x){}finally{sig()}};r.send()}
 document.getElementById("espera").textContent=L("PulsePC · esperando al PC…","PulsePC · waiting for the PC…");
-setInterval(pedir,1000);pedir();
+pedir();
 // Sin datos 30 s: se oscurece y avisa. Anti-quemado: se mueve un poco cada minuto.
 setInterval(function(){var sin=Date.now()-ultOK>30000;document.getElementById("espera").style.display=sin?"flex":"none";
   document.getElementById("raiz").style.opacity=sin?0:1},2000);

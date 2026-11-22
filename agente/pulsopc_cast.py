@@ -120,8 +120,10 @@ def enviar(uuid, url):
 def _vigilar(cast):
     # Si el Nest Hub cierra la pagina (pasa a veces tras un rato, o si alguien le pide
     # otra cosa con la voz), se vuelve a abrir mientras siga activado "enviar".
+    # Si no responde, se espera cada vez mas entre intentos (30 s, 60 s, ... hasta 5 min)
+    # para no insistirle a un Nest Hub que ya va mal.
     fallos = 0
-    while not _parar.wait(30):
+    while not _parar.wait(min(30 * (fallos + 1), 300)):
         try:
             app = cast.status.app_id if cast.status else None
             if app != APP_DASHCAST:
