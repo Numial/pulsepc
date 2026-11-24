@@ -1,0 +1,29 @@
+# Publica instalar_pulsepc.bat en la release "apk" para que se pueda descargar con un clic
+# (desde "raw" el navegador lo abre como texto).
+name: Instalador
+
+on:
+  push:
+    branches: [main]
+    paths: ['instalar_pulsepc.bat', '.github/workflows/instalador.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: false
+
+jobs:
+  instalador:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Subir a la release "apk"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view apk >/dev/null 2>&1 || gh release create apk --title "PulsePC · app Android" \
+            --notes "Última versión de la app, compilada automáticamente. PulsePC la instala sola en el móvil al conectarlo por USB." --latest
+          gh release upload apk instalar_pulsepc.bat --clobber

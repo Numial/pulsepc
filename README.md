@@ -14,9 +14,22 @@ Mira las estadísticas de tu PC en tiempo real en un móvil antiguo (Android 6.0
 
 ## 1. Agente del PC
 
-Requiere Python 3.8+.
+### Instalar en un PC nuevo
 
-1. Doble clic en `agente/iniciar_agente.bat`. Instala lo necesario (`psutil`, `pystray`, `pillow`), cierra su ventana y deja **PulsePC en la bandeja**, junto al reloj (puede estar dentro de la flechita ^).
+El agente es la carpeta `agente/` entera (no basta con copiar un `.bat` suelto). La forma más fácil:
+
+1. Descarga [`instalar_pulsepc.bat`](https://github.com/Numial/pulsepc/releases/download/apk/instalar_pulsepc.bat) y ábrelo con doble clic.
+   Si Windows muestra *Windows protegió su PC*, pulsa *Más información* → *Ejecutar de todas formas*.
+2. Descarga el agente de GitHub, lo copia en `%LOCALAPPDATA%\PulsePC\agente` y lo abre. Si el PC no tiene Python, lo instala con `winget` (Python 3.12, solo para tu usuario).
+3. Para **actualizar** PulsePC más adelante, vuelve a abrir `instalar_pulsepc.bat`: sustituye los archivos y conserva tu diseño, ajustes e imágenes.
+
+Alternativa manual: en GitHub, *Code → Download ZIP*, descomprímelo donde quieras y abre `agente/iniciar_agente.bat` (o `git clone https://github.com/Numial/pulsepc`).
+
+### Uso
+
+Requiere Python 3.8+ (`iniciar_agente.bat` lo instala con `winget` si falta).
+
+1. Doble clic en `agente/iniciar_agente.bat` (o en el acceso directo **PulsePC**). La primera vez instala lo necesario (`psutil`, `pystray`, `pillow`, `pychromecast`), cierra su ventana y deja **PulsePC en la bandeja**, junto al reloj (puede estar dentro de la flechita ^).
 2. La primera vez, Windows pedirá permiso en el firewall: permite **redes privadas**.
    PulsePC crea además un acceso directo **PulsePC** con su icono en el Escritorio y en el menú Inicio.
 3. Desde el icono: *Personalizar el móvil*, *Ver panel web*, *Arrancar con Windows* y *Salir*. El icono se pone verde cuando el móvil está leyendo datos.
