@@ -17,6 +17,7 @@ Uso:  python pulsopc_agente.py [--puerto 47801]
 """
 
 import argparse
+import ipaddress
 import json
 import os
 import platform
@@ -1133,7 +1134,48 @@ class Manejador(BaseHTTPRequestHandler):
         ip = self.client_address[0]
         return ip.startswith("127.") or ip == "::1" or ip == ip_local()
 
+    # Proteccion frente a paginas web maliciosas abiertas en el navegador del PC.
+    # Una web cualquiera puede mandar peticiones a http://127.0.0.1:47801 (CSRF) o usar un
+    # dominio suyo que apunte a 127.0.0.1 (DNS rebinding) y, como llegan desde el propio PC,
+    # pasarian la comprobacion de _es_local. Por eso:
+    #  - solo se aceptan peticiones dirigidas a una IP, a "localhost" o al nombre del PC
+    #    (la app, el editor y el Nest Hub siempre usan uno de esos; un dominio ajeno, no);
+    #  - un POST que venga de un navegador tiene que venir de una pagina del propio agente.
+    def _host_valido(self):
+        host = (self.headers.get("Host") or "").strip().lower()
+        if not host:
+            return True   # clientes HTTP/1.0 sin cabecera Host (no son navegadores)
+        if host.startswith("["):
+            nombre = host[1:host.find("]")] if "]" in host else host[1:]
+        else:
+            nombre = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+        nombre = nombre.rstrip(".")
+        equipo = socket.gethostname().lower()
+        if nombre in ("localhost", equipo, equipo + ".local"):
+            return True
+        try:
+            ipaddress.ip_address(nombre)
+            return True
+        except ValueError:
+            return False
+
+    def _origen_valido(self):
+        if self.headers.get("Sec-Fetch-Site", "").lower() == "cross-site":
+            return False
+        origen = self.headers.get("Origin")
+        if origen is None:
+            return True   # no es un navegador (la app del movil, la bandeja, curl...)
+        return origen.strip().lower() == "http://" + (self.headers.get("Host") or "").strip().lower()
+
+    def _rechazar(self, post=False):
+        if not self._host_valido() or (post and not self._origen_valido()):
+            self._json({"error": "peticion no permitida"}, 403)
+            return True
+        return False
+
     def do_GET(self):
+        if self._rechazar():
+            return
         ruta = self.path.split("?")[0]
         if ruta == "/stats":
             # Por USB (adb reverse) el movil llega como 127.0.0.1; por Wi-Fi, con su IP.
@@ -1208,6 +1250,8 @@ class Manejador(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        if self._rechazar(post=True):
+            return
         if self.path.split("?")[0] == "/salir":
             # Cierra el agente (solo desde el propio PC). Sirve para actualizarlo sin
             # tener que usar el menu del icono; luego se relanza con: schtasks /Run /TN PulsePC
