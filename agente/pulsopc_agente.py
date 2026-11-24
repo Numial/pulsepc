@@ -51,6 +51,38 @@ def _dir_datos():
 
 DIR_AGENTE = _dir_datos()
 
+# Carpeta de los archivos del programa (scripts de PowerShell, paginas, LibreHardwareMonitor):
+# junto al .exe que se esta ejecutando. Con permisos de administrador PulsePC.exe se instala
+# en C:\Program Files\PulsePC, que solo puede cambiar un administrador; los datos (diseno,
+# ajustes, registro) siguen en %LOCALAPPDATA%\PulsePC.
+CONGELADO = getattr(sys, "frozen", False)
+DIR_RECURSOS = os.path.dirname(os.path.abspath(sys.executable if CONGELADO else __file__))
+SYSTEM32 = os.path.join(os.environ.get("SystemRoot") or r"C:\Windows", "System32")
+POWERSHELL = os.path.join(SYSTEM32, "WindowsPowerShell", "v1.0", "powershell.exe")
+if platform.system() != "Windows":
+    POWERSHELL = "powershell"
+
+
+def ruta_protegida(ruta):
+    """La ruta esta dentro de Windows o de Program Files (solo la cambia un administrador)."""
+    if platform.system() != "Windows" or not ruta:
+        return False
+    r = os.path.normcase(os.path.abspath(ruta))
+    for k in ("SystemRoot", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+        b = os.environ.get(k)
+        if b and r.startswith(os.path.normcase(os.path.abspath(b)).rstrip("\\/") + os.sep):
+            return True
+    return False
+
+
+def modo_estricto():
+    """PulsePC.exe con permisos de administrador: solo ejecuta programas de carpetas protegidas.
+    Si ejecutara algo de una carpeta que puede cambiar cualquier programa del usuario (Descargas,
+    AppData, el PATH del usuario...), un programa malicioso podria colarse ahi y conseguir
+    permisos de administrador sin aviso. (Con Python a mano no aplica: los propios .py estan
+    en una carpeta del usuario.)"""
+    return CONGELADO and platform.system() == "Windows" and es_admin()
+
 
 # ------------------------------------------------------------------ idioma --
 # Idioma de PulsePC (espanol o ingles): lo usan la bandeja, el editor, el Nest Hub y
@@ -154,8 +186,20 @@ def _parsear_gpu(linea):
     }
 
 
-def bucle_gpu():
+def buscar_nvidia_smi():
     exe = shutil.which("nvidia-smi")
+    if not modo_estricto():
+        return exe
+    for c in (exe, os.path.join(SYSTEM32, "nvidia-smi.exe"),
+              os.path.join(os.environ.get("ProgramW6432") or os.environ.get("ProgramFiles") or r"C:\Program Files",
+                           "NVIDIA Corporation", "NVSMI", "nvidia-smi.exe")):
+        if c and ruta_protegida(c) and os.path.isfile(c):
+            return c
+    return None
+
+
+def bucle_gpu():
+    exe = buscar_nvidia_smi()
     if not exe:
         return
     while True:
@@ -184,7 +228,18 @@ def leer_gpu_nvidia():
 # Se descarga LibreHardwareMonitorLib (build .NET Framework) a agente/lhm/ y se lee
 # con lhm_sensores.ps1 en Windows PowerShell. Sin la app de LHM ni su servidor web.
 
-LHM_DIR = os.path.join(DIR_AGENTE, "lhm")
+LHM_DIR = os.path.join(DIR_AGENTE, "lhm")   # se decide en bucle_lhm() (ver dir_lhm)
+
+
+def dir_lhm():
+    """Donde va LibreHardwareMonitor: junto al programa si esta en Program Files (y se puede
+    escribir ahi o ya esta descargado); si no, en la carpeta de datos, como antes."""
+    propio = os.path.join(DIR_RECURSOS, "lhm")
+    if ruta_protegida(DIR_RECURSOS) and (es_admin() or os.path.isfile(os.path.join(propio, "LibreHardwareMonitorLib.dll"))):
+        return propio
+    return os.path.join(DIR_AGENTE, "lhm")
+
+
 LHM_API = "https://api.github.com/repos/LibreHardwareMonitor/LibreHardwareMonitor/releases/latest"
 _lhm = {"sensores": [], "t": 0.0}
 _procesos = []
@@ -196,7 +251,7 @@ def pawnio_instalado():
     if platform.system() != "Windows":
         return True
     try:
-        out = subprocess.run(["sc", "query", "PawnIO"], capture_output=True, text=True, errors="replace",
+        out = subprocess.run([os.path.join(SYSTEM32, "sc.exe"), "query", "PawnIO"], capture_output=True, text=True, errors="replace",
                              timeout=5, creationflags=SIN_VENTANA)
         return out.returncode == 0
     except Exception:
@@ -253,16 +308,23 @@ def asegurar_lhm():
 
 
 def bucle_lhm():
+    global LHM_DIR
     if platform.system() != "Windows":
         return
-    script = os.path.join(DIR_AGENTE, "lhm_sensores.ps1")
+    if modo_estricto() and not ruta_protegida(DIR_RECURSOS):
+        # Elevado pero fuera de Program Files: no se ejecuta nada de una carpeta del usuario.
+        estado_lhm["texto"] = tr("Sensores: PulsePC no esta instalado en Program Files",
+                                 "Sensors: PulsePC is not installed in Program Files")
+        return
+    LHM_DIR = dir_lhm()
+    script = os.path.join(DIR_RECURSOS, "lhm_sensores.ps1")
     espera = 5
     while True:
         try:
             if not asegurar_lhm():
                 raise RuntimeError("no encuentro LibreHardwareMonitorLib.dll")
             proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                [POWERSHELL, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                  "-File", script, "-Dir", LHM_DIR],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors="replace", encoding="utf-8",
                 creationflags=SIN_VENTANA)
@@ -483,15 +545,17 @@ def pulsar_tecla(accion):
 
 
 def bucle_medios():
-    script = os.path.join(DIR_AGENTE, "medios.ps1")
+    script = os.path.join(DIR_RECURSOS, "medios.ps1")
     if platform.system() != "Windows" or not os.path.isfile(script):
         return
+    if modo_estricto() and not ruta_protegida(DIR_RECURSOS):
+        return   # elevado fuera de Program Files: no se ejecuta nada de una carpeta del usuario
     while True:
         try:
             if not widget_en_uso("multimedia"):
                 time.sleep(5)
                 continue
-            proc = subprocess.Popen(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
+            proc = subprocess.Popen([POWERSHELL, "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
                                      "Bypass", "-File", script], stdout=subprocess.PIPE,
                                     stderr=subprocess.DEVNULL, text=True, errors="replace", encoding="utf-8",
                                     creationflags=SIN_VENTANA)
@@ -655,7 +719,44 @@ def bucle_anuncio(puerto_http):
         time.sleep(2)
 
 
+URL_PLATFORM_TOOLS = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+
+
+def descargar_adb(destino):
+    """Descarga adb de Google (Android Platform Tools) a una carpeta de Program Files."""
+    import io
+    import zipfile
+    req = urllib.request.Request(URL_PLATFORM_TOOLS, headers={"User-Agent": "PulsePC"})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        z = zipfile.ZipFile(io.BytesIO(r.read()))
+    os.makedirs(destino, exist_ok=True)
+    for n in z.namelist():
+        base = os.path.basename(n)
+        if n.count("/") == 1 and n.startswith("platform-tools/") and \
+                (base.lower() == "adb.exe" or base.lower().endswith(".dll")):
+            with z.open(n) as fo, open(os.path.join(destino, base), "wb") as fd:
+                fd.write(fo.read())
+    exe = os.path.join(destino, "adb.exe")
+    return exe if os.path.isfile(exe) else None
+
+
 def buscar_adb():
+    if modo_estricto():
+        # Elevado: el adb de Android Studio, scrcpy, etc. esta en carpetas del usuario y no se
+        # ejecuta con permisos de administrador. Se usa uno en carpeta protegida o se descarga.
+        exe = shutil.which("adb")
+        if exe and ruta_protegida(exe):
+            return exe
+        junto = os.path.join(DIR_RECURSOS, "platform-tools", "adb.exe")
+        if ruta_protegida(junto) and os.path.isfile(junto):
+            return junto
+        if not ruta_protegida(DIR_RECURSOS):
+            return None
+        try:
+            return descargar_adb(os.path.dirname(junto))
+        except Exception as e:
+            print("No pude descargar adb:", e)
+            return None
     exe = shutil.which("adb")
     if exe:
         return exe
@@ -676,7 +777,7 @@ def buscar_adb():
         hallados = glob.glob(patron)
         if hallados:
             return hallados[0]
-    junto = os.path.join(DIR_AGENTE, "platform-tools", "adb.exe")
+    junto = os.path.join(DIR_RECURSOS, "platform-tools", "adb.exe")
     return junto if os.path.isfile(junto) else None
 
 
@@ -917,8 +1018,8 @@ DISENO_PANTALLA_POR_DEFECTO = {
 
 RUTA_CONFIG = os.path.join(DIR_AGENTE, "pulsopc_config.json")
 RUTA_CONFIG_PANTALLA = os.path.join(DIR_AGENTE, "pulsopc_pantalla.json")
-RUTA_EDITOR = os.path.join(DIR_AGENTE, "editor.html")
-RUTA_PANTALLA = os.path.join(DIR_AGENTE, "pantalla.html")
+RUTA_EDITOR = os.path.join(DIR_RECURSOS, "editor.html")
+RUTA_PANTALLA = os.path.join(DIR_RECURSOS, "pantalla.html")
 _diseno = {"valor": None, "pantalla": None, "lock": threading.Lock()}
 DESTINOS = {
     "movil": (RUTA_CONFIG, DISENO_POR_DEFECTO),

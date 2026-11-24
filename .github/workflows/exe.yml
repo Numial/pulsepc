@@ -54,7 +54,16 @@ jobs:
           if (Test-Path $log) { Get-Content $log -Tail 40 }
           if (-not $ok) { throw 'PulsePC.exe no responde en el puerto 47801' }
           $r | ConvertTo-Json -Depth 2 | Select-Object -First 30
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'PulsePC\PulsePC.exe'))) { throw 'No se instalo en LOCALAPPDATA' }
+          # El runner es administrador: PulsePC se tiene que instalar en Program Files (protegido).
+          $prog = Join-Path $env:ProgramFiles 'PulsePC'
+          foreach ($f in 'PulsePC.exe', 'lhm_sensores.ps1', 'medios.ps1', 'editor.html') {
+            if (-not (Test-Path (Join-Path $prog $f))) { throw "Falta $f en $prog" }
+          }
+          $exeProg = Join-Path $prog 'PulsePC.exe'
+          Get-Process PulsePC -ErrorAction SilentlyContinue | Format-Table Id, Path
+          if (-not (Get-Process PulsePC -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exeProg })) { throw 'PulsePC no corre desde Program Files' }
+          $t = Get-ScheduledTask -TaskName PulsePC -ErrorAction SilentlyContinue
+          if ($t) { $t.Actions | Format-List Execute, WorkingDirectory; if ($t.Actions[0].Execute -notlike "$prog*") { throw 'La tarea no apunta a Program Files' } }
           Invoke-WebRequest http://127.0.0.1:47801/editor -UseBasicParsing | Out-Null
           Get-Process PulsePC -ErrorAction SilentlyContinue | Stop-Process -Force
 

@@ -18,7 +18,7 @@ Mira las estadísticas de tu PC en tiempo real en un móvil antiguo (Android 6.0
 
 1. Descarga **[PulsePC.exe](https://github.com/Numial/pulsepc/releases/download/pc/PulsePC.exe)** y ábrelo con doble clic. No hace falta instalar Python ni nada más.
    Si Windows muestra *Windows protegió su PC*, pulsa *Más información* → *Ejecutar de todas formas* (el .exe no está firmado).
-2. Se instala solo en `%LOCALAPPDATA%\PulsePC`, pide permiso de administrador una vez (para la temperatura de la CPU), queda en la bandeja y crea el acceso directo **PulsePC** en el Escritorio y el menú Inicio. Ya puedes borrar el .exe descargado.
+2. Pide permiso de administrador una vez (para la temperatura de la CPU) y se instala solo en `C:\Program Files\PulsePC` (si dices que no, en `%LOCALAPPDATA%\PulsePC`, sin temperatura de CPU). El diseño, los ajustes y el registro se guardan en `%LOCALAPPDATA%\PulsePC`. Después queda en la bandeja y crea el acceso directo **PulsePC** en el Escritorio y el menú Inicio. Ya puedes borrar el .exe descargado.
 3. Para **actualizar**, descarga el PulsePC.exe nuevo y ábrelo: cierra el anterior, lo sustituye y conserva tu diseño, ajustes e imágenes.
 
 El .exe lo genera GitHub Actions (`.github/workflows/exe.yml`) con cada cambio en `agente/`.
@@ -49,7 +49,7 @@ Con el código fuente hace falta Python 3.8+ (`iniciar_agente.bat` lo instala co
 
 1. En el móvil: *Ajustes → Información del teléfono →* pulsa 7 veces *Número de compilación*. Luego *Opciones de desarrollador → Depuración USB*.
 2. Conecta el cable y acepta el aviso de "¿Permitir depuración USB?" en el móvil.
-3. El agente detecta el móvil cada 5 s y ejecuta `adb reverse` solo. Necesita `adb`: lo busca en el PATH, en el SDK de Android Studio (`%LOCALAPPDATA%\Android\Sdk\platform-tools`) o en una carpeta `platform-tools` junto al script.
+3. El agente detecta el móvil cada 5 s y ejecuta `adb reverse` solo. Necesita `adb`: lo busca en el PATH, en el SDK de Android Studio (`%LOCALAPPDATA%\Android\Sdk\platform-tools`) o en una carpeta `platform-tools` junto al script. PulsePC.exe con permisos de administrador no ejecuta el adb de carpetas de tu usuario: usa uno en Program Files o descarga el oficial de Google a `C:\Program Files\PulsePC\platform-tools`.
 
 La app prueba primero el USB y, si no hay cable, usa la Wi‑Fi. Arriba se ve por dónde está conectada.
 
