@@ -19,8 +19,17 @@ import threading
 import time
 import webbrowser
 
-DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, DIR)
+# PulsePC.exe (empaquetado con PyInstaller): se instala solo en %LOCALAPPDATA%\\PulsePC
+# y guarda alli su diseno, ajustes y registro. Con Python, todo va junto al script.
+CONGELADO = getattr(sys, "frozen", False)
+if CONGELADO:
+    DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "PulsePC")
+    os.makedirs(DIR, exist_ok=True)
+else:
+    DIR = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, DIR)
+EXE_INSTALADO = os.path.join(DIR, "PulsePC.exe")
+RECURSOS = ("editor.html", "pantalla.html", "lhm_sensores.ps1", "medios.ps1", "pulsepc.ico")
 
 logging.basicConfig(filename=os.path.join(DIR, "pulsopc.log"), level=logging.INFO,
                     format="%(asctime)s %(message)s")
@@ -83,8 +92,13 @@ def pythonw():
     return exe
 
 
+def args_propios():
+    """Argumentos para relanzar PulsePC: el .exe no necesita el nombre del script."""
+    return [] if CONGELADO else [os.path.join(DIR, "pulsopc_bandeja.pyw")]
+
+
 def comando_arranque():
-    return '"%s" "%s"' % (pythonw(), os.path.join(DIR, "pulsopc_bandeja.pyw"))
+    return " ".join('"%s"' % a for a in [pythonw()] + args_propios() + ["--inicio"])
 
 
 def _ps(script):
@@ -102,7 +116,7 @@ def tarea_existe():
 
 def crear_tarea():
     exe = pythonw().replace("'", "''")
-    arg = ('"%s"' % os.path.join(DIR, "pulsopc_bandeja.pyw")).replace("'", "''")
+    arg = " ".join('"%s"' % a for a in args_propios() + ["--inicio"]).replace("'", "''")
     d = DIR.replace("'", "''")
     r = _ps(
         "$a = New-ScheduledTaskAction -Execute '%s' -Argument '%s' -WorkingDirectory '%s';"
@@ -211,7 +225,7 @@ def crear_accesos():
     veia con el icono generico de los .bat."""
     import subprocess
     marca = os.path.join(DIR, ".acceso_escritorio")
-    bat = os.path.join(DIR, "iniciar_agente.bat").replace("'", "''")
+    bat = (EXE_INSTALADO if CONGELADO else os.path.join(DIR, "iniciar_agente.bat")).replace("'", "''")
     ico = os.path.join(DIR, "pulsepc.ico").replace("'", "''")
     d = DIR.replace("'", "''")
     escritorio = "$false" if os.path.exists(marca) else "$true"
@@ -235,13 +249,68 @@ def crear_accesos():
         logging.info("No pude crear los accesos directos: %s", (r.stderr or "").strip()[:300])
 
 
+# ------------------------------------------------------- PulsePC.exe --
+
+def _cerrar_abierto():
+    """Pide al PulsePC que ya este abierto que se cierre (para poder sustituir el .exe)."""
+    import urllib.request
+    try:
+        with open(os.path.join(DIR, ".token")) as f:
+            token = f.read().strip()
+        req = urllib.request.Request("http://127.0.0.1:%d/salir" % agente.PUERTO_HTTP, data=b"",
+                                     headers={"X-Token": token}, method="POST")
+        urllib.request.urlopen(req, timeout=3).read()
+    except Exception as e:
+        logging.info("No pude cerrar el PulsePC abierto: %s", e)
+
+
+def instalar_exe():
+    """Copia los archivos que lleva dentro el .exe a su carpeta y, si se ha abierto desde
+    otro sitio (Descargas...), se copia a %LOCALAPPDATA%\\PulsePC\\PulsePC.exe y abre esa copia.
+    Devuelve True si ha lanzado la copia instalada (y esta debe terminar)."""
+    import shutil
+    import subprocess
+    base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    for n in RECURSOS:
+        origen, destino = os.path.join(base, n), os.path.join(DIR, n)
+        try:
+            with open(origen, "rb") as f:
+                nuevo = f.read()
+            if not os.path.isfile(destino) or open(destino, "rb").read() != nuevo:
+                with open(destino, "wb") as f:
+                    f.write(nuevo)
+        except OSError as e:
+            logging.info("No pude copiar %s: %s", n, e)
+    if os.path.normcase(os.path.abspath(sys.executable)) == os.path.normcase(EXE_INSTALADO):
+        return False
+    for intento in range(20):
+        try:
+            shutil.copyfile(sys.executable, EXE_INSTALADO)
+            break
+        except OSError:
+            if intento == 0:
+                _cerrar_abierto()   # version anterior abierta: se cierra para actualizarla
+            time.sleep(0.5)
+    else:
+        logging.info("No pude copiar PulsePC.exe a %s; sigo desde %s", DIR, sys.executable)
+        return False
+    logging.info("PulsePC.exe instalado en %s", EXE_INSTALADO)
+    args = [a for a in sys.argv[1:] if a not in ("--esperar", "--inicio")]
+    subprocess.Popen([EXE_INSTALADO] + args, cwd=DIR, close_fds=True)
+    return True
+
+
 # ------------------------------------------------------------------- main --
 
 def main():
     # Lanzado desde iniciar_agente.bat: pedimos permisos de administrador una vez
     # (para la temperatura de la CPU). Si se rechaza el aviso, sigue sin ellos.
-    if "--elevar" in sys.argv and os.name == "nt" and not agente.es_admin():
-        if ejecutar_elevado([pythonw(), os.path.join(DIR, "pulsopc_bandeja.pyw"), "--esperar"]):
+    if CONGELADO and instalar_exe():
+        return
+    # PulsePC.exe abierto a mano tambien pide permisos (no al arrancar con Windows: --inicio).
+    elevar = "--elevar" in sys.argv or (CONGELADO and not ({"--esperar", "--inicio"} & set(sys.argv)))
+    if elevar and os.name == "nt" and not agente.es_admin():
+        if ejecutar_elevado([pythonw()] + args_propios() + ["--esperar"]):
             return
     intentos = 20 if "--esperar" in sys.argv else 1
     for i in range(intentos):
@@ -294,7 +363,7 @@ def main():
 
     def reiniciar_admin(icon, item):
         # Se lanza otra copia elevada; esta se cierra para liberar el puerto.
-        if ejecutar_elevado([pythonw(), os.path.join(DIR, "pulsopc_bandeja.pyw"), "--esperar"]):
+        if ejecutar_elevado([pythonw()] + args_propios() + ["--esperar"]):
             salir(icon, item)
 
     def instalar_pawnio(icon, item):

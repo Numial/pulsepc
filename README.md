@@ -16,18 +16,18 @@ Mira las estadísticas de tu PC en tiempo real en un móvil antiguo (Android 6.0
 
 ### Instalar en un PC nuevo
 
-El agente es la carpeta `agente/` entera (no basta con copiar un `.bat` suelto). La forma más fácil:
+1. Descarga **[PulsePC.exe](https://github.com/Numial/pulsepc/releases/download/pc/PulsePC.exe)** y ábrelo con doble clic. No hace falta instalar Python ni nada más.
+   Si Windows muestra *Windows protegió su PC*, pulsa *Más información* → *Ejecutar de todas formas* (el .exe no está firmado).
+2. Se instala solo en `%LOCALAPPDATA%\PulsePC`, pide permiso de administrador una vez (para la temperatura de la CPU), queda en la bandeja y crea el acceso directo **PulsePC** en el Escritorio y el menú Inicio. Ya puedes borrar el .exe descargado.
+3. Para **actualizar**, descarga el PulsePC.exe nuevo y ábrelo: cierra el anterior, lo sustituye y conserva tu diseño, ajustes e imágenes.
 
-1. Descarga [`instalar_pulsepc.bat`](https://github.com/Numial/pulsepc/releases/download/apk/instalar_pulsepc.bat) y ábrelo con doble clic.
-   Si Windows muestra *Windows protegió su PC*, pulsa *Más información* → *Ejecutar de todas formas*.
-2. Descarga el agente de GitHub, lo copia en `%LOCALAPPDATA%\PulsePC\agente` y lo abre. Si el PC no tiene Python, lo instala con `winget` (Python 3.12, solo para tu usuario).
-3. Para **actualizar** PulsePC más adelante, vuelve a abrir `instalar_pulsepc.bat`: sustituye los archivos y conserva tu diseño, ajustes e imágenes.
+El .exe lo genera GitHub Actions (`.github/workflows/exe.yml`) con cada cambio en `agente/`.
 
-Alternativa manual: en GitHub, *Code → Download ZIP*, descomprímelo donde quieras y abre `agente/iniciar_agente.bat` (o `git clone https://github.com/Numial/pulsepc`).
+**Desde el código (con Python):** *Code → Download ZIP* (o `git clone`), descomprímelo y abre `agente/iniciar_agente.bat`. Hace falta la carpeta `agente/` entera, no solo el `.bat`.
 
 ### Uso
 
-Requiere Python 3.8+ (`iniciar_agente.bat` lo instala con `winget` si falta).
+Con el código fuente hace falta Python 3.8+ (`iniciar_agente.bat` lo instala con `winget` si falta).
 
 1. Doble clic en `agente/iniciar_agente.bat` (o en el acceso directo **PulsePC**). La primera vez instala lo necesario (`psutil`, `pystray`, `pillow`, `pychromecast`), cierra su ventana y deja **PulsePC en la bandeja**, junto al reloj (puede estar dentro de la flechita ^).
 2. La primera vez, Windows pedirá permiso en el firewall: permite **redes privadas**.
