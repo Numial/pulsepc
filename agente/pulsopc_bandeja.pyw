@@ -29,6 +29,12 @@ else:
     DIR = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, DIR)
 EXE_INSTALADO = os.path.join(DIR, "PulsePC.exe")
+# Con permisos de administrador, el programa se instala en Program Files: la tarea programada
+# lo arranca elevado sin aviso, asi que tiene que estar donde solo un administrador pueda
+# cambiarlo (en AppData cualquier programa del usuario podria sustituirlo).
+DIR_PROGRAMA = os.path.join(os.environ.get("ProgramW6432") or os.environ.get("ProgramFiles")
+                            or r"C:\Program Files", "PulsePC")
+EXE_PROGRAMA = os.path.join(DIR_PROGRAMA, "PulsePC.exe")
 RECURSOS = ("editor.html", "pantalla.html", "lhm_sensores.ps1", "medios.ps1", "pulsepc.ico")
 
 logging.basicConfig(filename=os.path.join(DIR, "pulsopc.log"), level=logging.INFO,
@@ -81,6 +87,23 @@ ICONO_OFF = dibujar_icono((120, 128, 140, 255))
 # Sin permisos, se usa la clave Run del registro (sin temperatura de CPU).
 
 SIN_VENTANA = 0x08000000
+SYSTEM32 = os.path.join(os.environ.get("SystemRoot") or r"C:\Windows", "System32")
+SCHTASKS = os.path.join(SYSTEM32, "schtasks.exe")
+POWERSHELL = os.path.join(SYSTEM32, "WindowsPowerShell", "v1.0", "powershell.exe")
+
+
+def _mismo(a, b):
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def en_programa():
+    """Este PulsePC.exe es el instalado en Program Files."""
+    return CONGELADO and _mismo(sys.executable, EXE_PROGRAMA)
+
+
+def dir_recursos():
+    """Carpeta con editor.html, los .ps1 y el icono: junto al .exe que se esta ejecutando."""
+    return os.path.dirname(os.path.abspath(sys.executable)) if CONGELADO else DIR
 
 
 def pythonw():
@@ -103,13 +126,13 @@ def comando_arranque():
 
 def _ps(script):
     import subprocess
-    return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+    return subprocess.run([POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", script],
                           capture_output=True, text=True, errors="replace", timeout=30, creationflags=SIN_VENTANA)
 
 
 def tarea_existe():
     import subprocess
-    r = subprocess.run(["schtasks", "/Query", "/TN", NOMBRE_RUN], capture_output=True,
+    r = subprocess.run([SCHTASKS, "/Query", "/TN", NOMBRE_RUN], capture_output=True,
                        creationflags=SIN_VENTANA)
     return r.returncode == 0
 
@@ -117,7 +140,7 @@ def tarea_existe():
 def crear_tarea():
     exe = pythonw().replace("'", "''")
     arg = " ".join('"%s"' % a for a in args_propios() + ["--inicio"]).replace("'", "''")
-    d = DIR.replace("'", "''")
+    d = dir_recursos().replace("'", "''")
     r = _ps(
         "$a = New-ScheduledTaskAction -Execute '%s' -Argument '%s' -WorkingDirectory '%s';"
         "$t = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME;"
@@ -132,7 +155,7 @@ def crear_tarea():
 
 def borrar_tarea():
     import subprocess
-    subprocess.run(["schtasks", "/Delete", "/TN", NOMBRE_RUN, "/F"], capture_output=True,
+    subprocess.run([SCHTASKS, "/Delete", "/TN", NOMBRE_RUN, "/F"], capture_output=True,
                    creationflags=SIN_VENTANA)
 
 
@@ -169,7 +192,7 @@ def poner_arranque(activar):
             if agente.es_admin():
                 borrar_tarea()
             else:
-                ejecutar_elevado(["schtasks", "/Delete", "/TN", NOMBRE_RUN, "/F"])
+                ejecutar_elevado([SCHTASKS, "/Delete", "/TN", NOMBRE_RUN, "/F"])
         return
     if agente.es_admin():
         crear_tarea()
@@ -184,17 +207,17 @@ def ejecutar_elevado(cmd, args_lista=None):
     import subprocess
     exe = cmd[0]
     params = subprocess.list2cmdline(cmd[1:])
-    return ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, DIR, 1) > 32
+    return ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, dir_recursos(), 1) > 32
 
 
 def migrar_nombre_antiguo():
     """La app se llamaba PulsoPC: se borra la tarea/clave Run con ese nombre y se crea la nueva."""
     import subprocess
     habia = False
-    r = subprocess.run(["schtasks", "/Query", "/TN", NOMBRE_ANTIGUO], capture_output=True,
+    r = subprocess.run([SCHTASKS, "/Query", "/TN", NOMBRE_ANTIGUO], capture_output=True,
                        creationflags=SIN_VENTANA)
     if r.returncode == 0 and agente.es_admin():
-        subprocess.run(["schtasks", "/Delete", "/TN", NOMBRE_ANTIGUO, "/F"], capture_output=True,
+        subprocess.run([SCHTASKS, "/Delete", "/TN", NOMBRE_ANTIGUO, "/F"], capture_output=True,
                        creationflags=SIN_VENTANA)
         habia = True
     try:
@@ -225,9 +248,9 @@ def crear_accesos():
     veia con el icono generico de los .bat."""
     import subprocess
     marca = os.path.join(DIR, ".acceso_escritorio")
-    bat = (EXE_INSTALADO if CONGELADO else os.path.join(DIR, "iniciar_agente.bat")).replace("'", "''")
-    ico = os.path.join(DIR, "pulsepc.ico").replace("'", "''")
-    d = DIR.replace("'", "''")
+    bat = (os.path.abspath(sys.executable) if CONGELADO else os.path.join(DIR, "iniciar_agente.bat")).replace("'", "''")
+    ico = os.path.join(dir_recursos(), "pulsepc.ico").replace("'", "''")
+    d = dir_recursos().replace("'", "''")
     escritorio = "$false" if os.path.exists(marca) else "$true"
     script = (
         "$w = New-Object -ComObject WScript.Shell;"
@@ -241,7 +264,7 @@ def crear_accesos():
         "if ((Test-Path $viejo) -and ((Get-Content $viejo -Raw) -match 'iniciar_agente|pulsopc_bandeja')) { Remove-Item $viejo };"
         "[Environment]::GetFolderPath('Desktop')"
     ) % (escritorio, bat, d, ico)
-    r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+    r = subprocess.run([POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", script],
                        capture_output=True, text=True, errors="replace", timeout=30, creationflags=SIN_VENTANA)
     if r.returncode == 0:
         open(marca, "w").close()
@@ -264,15 +287,11 @@ def _cerrar_abierto():
         logging.info("No pude cerrar el PulsePC abierto: %s", e)
 
 
-def instalar_exe():
-    """Copia los archivos que lleva dentro el .exe a su carpeta y, si se ha abierto desde
-    otro sitio (Descargas...), se copia a %LOCALAPPDATA%\\PulsePC\\PulsePC.exe y abre esa copia.
-    Devuelve True si ha lanzado la copia instalada (y esta debe terminar)."""
-    import shutil
-    import subprocess
+def _copiar_recursos(carpeta):
+    """Copia los archivos que lleva dentro el .exe (paginas, scripts, icono) a esa carpeta."""
     base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
     for n in RECURSOS:
-        origen, destino = os.path.join(base, n), os.path.join(DIR, n)
+        origen, destino = os.path.join(base, n), os.path.join(carpeta, n)
         try:
             with open(origen, "rb") as f:
                 nuevo = f.read()
@@ -281,21 +300,73 @@ def instalar_exe():
                     f.write(nuevo)
         except OSError as e:
             logging.info("No pude copiar %s: %s", n, e)
-    if os.path.normcase(os.path.abspath(sys.executable)) == os.path.normcase(EXE_INSTALADO):
-        return False
+
+
+def _copiar_exe(destino):
+    import shutil
     for intento in range(20):
         try:
-            shutil.copyfile(sys.executable, EXE_INSTALADO)
-            break
+            shutil.copyfile(sys.executable, destino)
+            return True
         except OSError:
             if intento == 0:
                 _cerrar_abierto()   # version anterior abierta: se cierra para actualizarla
             time.sleep(0.5)
-    else:
+    return False
+
+
+def _igual(a, b):
+    try:
+        if os.path.getsize(a) != os.path.getsize(b):
+            return False
+        with open(a, "rb") as fa, open(b, "rb") as fb:
+            return fa.read() == fb.read()
+    except OSError:
+        return False
+
+
+def instalar_exe():
+    """Instala PulsePC.exe y abre la copia instalada. Devuelve True si la ha lanzado (y esta
+    copia debe terminar).
+      - Con permisos de administrador: en C:\\Program Files\\PulsePC.
+      - Sin ellos: en %LOCALAPPDATA%\\PulsePC (sin arranque elevado, asi que no hay riesgo).
+    Los datos (diseno, ajustes, registro) van siempre en %LOCALAPPDATA%\\PulsePC."""
+    import subprocess
+    args = [a for a in sys.argv[1:] if a not in ("--esperar", "--inicio")]
+    if en_programa():
+        if agente.es_admin():
+            _copiar_recursos(DIR_PROGRAMA)
+            # La copia antigua de AppData ya no se usa: se borra para que nadie la abra
+            # (ni la cambie) pensando que es la buena.
+            try:
+                if os.path.isfile(EXE_INSTALADO):
+                    os.remove(EXE_INSTALADO)
+            except OSError:
+                pass
+        return False
+    if agente.es_admin():
+        try:
+            os.makedirs(DIR_PROGRAMA, exist_ok=True)
+            _copiar_recursos(DIR_PROGRAMA)
+            if _copiar_exe(EXE_PROGRAMA):
+                logging.info("PulsePC.exe instalado en %s", EXE_PROGRAMA)
+                subprocess.Popen([EXE_PROGRAMA] + sys.argv[1:], cwd=DIR_PROGRAMA, close_fds=True)
+                return True
+        except OSError as e:
+            logging.info("No pude instalar en %s: %s", DIR_PROGRAMA, e)
+        logging.info("No pude instalar en %s; sigo desde %s", DIR_PROGRAMA, sys.executable)
+        return False
+    _copiar_recursos(DIR)
+    if _mismo(sys.executable, EXE_INSTALADO):
+        return False
+    if _igual(sys.executable, EXE_PROGRAMA):
+        # Esta misma version ya esta en Program Files: se abre esa (pedira permisos).
+        subprocess.Popen([EXE_PROGRAMA] + args, cwd=DIR_PROGRAMA, close_fds=True)
+        return True
+    if not _copiar_exe(EXE_INSTALADO):
         logging.info("No pude copiar PulsePC.exe a %s; sigo desde %s", DIR, sys.executable)
         return False
     logging.info("PulsePC.exe instalado en %s", EXE_INSTALADO)
-    args = [a for a in sys.argv[1:] if a not in ("--esperar", "--inicio")]
     subprocess.Popen([EXE_INSTALADO] + args, cwd=DIR, close_fds=True)
     return True
 
@@ -345,6 +416,10 @@ def main():
             elif agente.es_admin() and run_existe() and not tarea_existe():
                 # Ya estaba activado sin permisos: lo pasamos a tarea elevada.
                 poner_arranque(True)
+            elif agente.es_admin() and tarea_existe():
+                # Se vuelve a crear para que apunte a este .exe (p. ej. el de Program Files
+                # en vez del antiguo de AppData).
+                crear_tarea()
         except Exception as e:
             logging.info("No pude configurar el arranque con Windows: %s", e)
 
