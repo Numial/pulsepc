@@ -30,6 +30,8 @@ if not defined PY (
 )
 
 echo Usando Python: %PY%
-%PY% -m pip install --quiet --disable-pip-version-check psutil
+%PY% -c "import psutil" >nul 2>nul || (
+  %PY% -m pip install --quiet --disable-pip-version-check -r requirements.txt || %PY% -m pip install --quiet --disable-pip-version-check --user -r requirements.txt
+)
 %PY% pulsopc_agente.py
 pause

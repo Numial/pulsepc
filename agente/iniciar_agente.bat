@@ -6,6 +6,8 @@ title PulsePC
 rem --- Buscar Python: lanzador "py", "python" real (no el atajo de la Microsoft Store) o rutas habituales ---
 set "PY="
 set "LANZADOR="
+set "INTENTADO="
+:buscar_python
 where py >nul 2>nul && (py -3 -c "import sys" >nul 2>nul && set "PY=py -3" && set "LANZADOR=1")
 if not defined PY (
   for /f "delims=" %%P in ('where python 2^>nul') do (
@@ -17,6 +19,14 @@ if not defined PY (
 if not defined PY (
   for /d %%D in ("%LOCALAPPDATA%\Python\pythoncore-3*" "%LOCALAPPDATA%\Python\bin" "%LOCALAPPDATA%\Programs\Python\Python3*" "%ProgramFiles%\Python3*" "C:\Python3*") do (
     if not defined PY if exist "%%~D\python.exe" set "PY="%%~D\python.exe""
+  )
+)
+if not defined PY if not defined INTENTADO (
+  where winget >nul 2>nul && (
+    set "INTENTADO=1"
+    echo No encuentro Python en este PC. Instalandolo con winget ^(solo la primera vez^)...
+    winget install -e --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements
+    goto buscar_python
   )
 )
 if not defined PY (
@@ -38,7 +48,11 @@ if defined LANZADOR set "PYW=pyw -3"
 rem Si ya esta todo instalado, no hace falta pip (asi abrir PulsePC es instantaneo).
 %PY% -c "import psutil, pystray, PIL, pychromecast" >nul 2>nul && goto arrancar
 echo Preparando PulsePC (solo la primera vez tarda un poco)...
-%PY% -m pip install --quiet --disable-pip-version-check psutil pystray pillow pychromecast
+%PY% -m ensurepip --upgrade >nul 2>nul
+%PY% -m pip install --quiet --disable-pip-version-check -r "%~dp0requirements.txt"
+rem Si Python esta en "Archivos de programa" sin permisos de escritura, se instala para este usuario.
+if errorlevel 1 %PY% -m pip install --quiet --disable-pip-version-check --user -r "%~dp0requirements.txt"
+%PY% -c "import psutil, pystray, PIL, pychromecast" >nul 2>nul
 if errorlevel 1 (
   echo No se pudieron instalar las dependencias. Revisa tu conexion a Internet.
   pause

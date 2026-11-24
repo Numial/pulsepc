@@ -1,0 +1,74 @@
+# Empaqueta el agente del PC en un solo PulsePC.exe (no hace falta instalar Python)
+# y lo publica en la release "pc" de GitHub.
+name: PulsePC.exe
+
+on:
+  push:
+    branches: [main]
+    paths: ['agente/**', '.github/workflows/exe.yml']
+  pull_request:
+    paths: ['agente/**', '.github/workflows/exe.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: exe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Dependencias
+        run: python -m pip install -r agente/requirements.txt pyinstaller==6.11.1
+
+      - name: Empaquetar
+        run: >
+          pyinstaller --noconfirm --clean --onefile --windowed --name PulsePC
+          --icon agente/pulsepc.ico --paths agente
+          --add-data "agente/editor.html;." --add-data "agente/pantalla.html;."
+          --add-data "agente/lhm_sensores.ps1;." --add-data "agente/medios.ps1;."
+          --add-data "agente/pulsepc.ico;."
+          --collect-all pychromecast --collect-all zeroconf
+          --hidden-import pystray._win32
+          agente/pulsopc_bandeja.pyw
+
+      - name: Probar que arranca
+        shell: pwsh
+        run: |
+          Start-Process dist\PulsePC.exe
+          $ok = $false
+          foreach ($i in 1..60) {
+            Start-Sleep -Seconds 2
+            try { $r = Invoke-RestMethod http://127.0.0.1:47801/stats -TimeoutSec 3; $ok = $true; break } catch {}
+          }
+          $log = Join-Path $env:LOCALAPPDATA 'PulsePC\pulsopc.log'
+          if (Test-Path $log) { Get-Content $log -Tail 40 }
+          if (-not $ok) { throw 'PulsePC.exe no responde en el puerto 47801' }
+          $r | ConvertTo-Json -Depth 2 | Select-Object -First 30
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'PulsePC\PulsePC.exe'))) { throw 'No se instalo en LOCALAPPDATA' }
+          Invoke-WebRequest http://127.0.0.1:47801/editor -UseBasicParsing | Out-Null
+          Get-Process PulsePC -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PulsePC
+          path: dist/PulsePC.exe
+
+      - name: Publicar en la release "pc"
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view pc >/dev/null 2>&1 || gh release create pc --title "PulsePC para Windows" \
+            --notes "Descarga PulsePC.exe y ábrelo. No hace falta instalar nada más." --latest=false
+          gh release upload pc dist/PulsePC.exe --clobber

@@ -23,6 +23,7 @@ import platform
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -40,11 +41,21 @@ _ultimo = {"stats": {}, "lock": threading.Lock(), "pedido": 0.0, "via": ""}
 estado = {"usb": set(), "avisos": []}
 
 
+def _dir_datos():
+    """Carpeta del agente: junto al script, o en %LOCALAPPDATA%\\PulsePC si es PulsePC.exe."""
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "PulsePC")
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+DIR_AGENTE = _dir_datos()
+
+
 # ------------------------------------------------------------------ idioma --
 # Idioma de PulsePC (espanol o ingles): lo usan la bandeja, el editor, el Nest Hub y
 # la app del movil (llega con /stats). Se guarda en agente/pulsopc_ajustes.json.
 
-RUTA_AJUSTES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsopc_ajustes.json")
+RUTA_AJUSTES = os.path.join(DIR_AGENTE, "pulsopc_ajustes.json")
 IDIOMAS = ("es", "en")
 _ajustes = {}
 
@@ -172,7 +183,6 @@ def leer_gpu_nvidia():
 # Se descarga LibreHardwareMonitorLib (build .NET Framework) a agente/lhm/ y se lee
 # con lhm_sensores.ps1 en Windows PowerShell. Sin la app de LHM ni su servidor web.
 
-DIR_AGENTE = os.path.dirname(os.path.abspath(__file__))
 LHM_DIR = os.path.join(DIR_AGENTE, "lhm")
 LHM_API = "https://api.github.com/repos/LibreHardwareMonitor/LibreHardwareMonitor/releases/latest"
 _lhm = {"sensores": [], "t": 0.0}
@@ -665,7 +675,7 @@ def buscar_adb():
         hallados = glob.glob(patron)
         if hallados:
             return hallados[0]
-    junto = os.path.join(os.path.dirname(os.path.abspath(__file__)), "platform-tools", "adb.exe")
+    junto = os.path.join(DIR_AGENTE, "platform-tools", "adb.exe")
     return junto if os.path.isfile(junto) else None
 
 
@@ -674,7 +684,7 @@ APP_PAQUETE = "com.pulsopc.app"
 
 # La app la compila GitHub en cada cambio (ver .github/workflows/apk.yml) y la deja aqui:
 URL_APK = "https://github.com/Numial/pulsepc/releases/download/apk/"
-DIR_APK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apk")
+DIR_APK = os.path.join(DIR_AGENTE, "apk")
 CADA_CUANTO_ACTUALIZAR = 30 * 60   # con el movil conectado, se vuelve a mirar cada 30 min
 
 
@@ -904,10 +914,10 @@ DISENO_PANTALLA_POR_DEFECTO = {
     ],
 }
 
-RUTA_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsopc_config.json")
-RUTA_CONFIG_PANTALLA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulsopc_pantalla.json")
-RUTA_EDITOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor.html")
-RUTA_PANTALLA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pantalla.html")
+RUTA_CONFIG = os.path.join(DIR_AGENTE, "pulsopc_config.json")
+RUTA_CONFIG_PANTALLA = os.path.join(DIR_AGENTE, "pulsopc_pantalla.json")
+RUTA_EDITOR = os.path.join(DIR_AGENTE, "editor.html")
+RUTA_PANTALLA = os.path.join(DIR_AGENTE, "pantalla.html")
 _diseno = {"valor": None, "pantalla": None, "lock": threading.Lock()}
 DESTINOS = {
     "movil": (RUTA_CONFIG, DISENO_POR_DEFECTO),
@@ -997,7 +1007,7 @@ def _clave(destino):
 import hashlib  # noqa: E402
 import re  # noqa: E402
 
-DIR_IMAGENES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "imagenes")
+DIR_IMAGENES = os.path.join(DIR_AGENTE, "imagenes")
 RE_IMAGEN = re.compile(r"^[0-9a-f]{16}\.(png|jpg|gif|webp)$")
 MAX_IMAGEN = 15 * 1024 * 1024
 TIPOS_IMAGEN = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
