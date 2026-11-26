@@ -217,7 +217,11 @@ function valor(t,w){
     case"grafica":{const m=(w&&w.metrica)||"cpu";const mp={cpu:[s.cpu.uso,"%"],gpu:[g&&g.uso,"%"],ram:[s.ram.porcentaje,"%"],temp_cpu:[s.cpu.temp,"°C"],temp_gpu:[g&&g.temp,"°C"],red:[s.red.bajada_kbs,"KB/s"]}[m];return[METRICAS[m]+" "+f(mp[0])+" "+mp[1],null]}
     case"procesos":{const p=s.procesos||[];return[p.length?p[0].nombre+" "+f(p[0].cpu,1)+" %":L("Procesos"),null]}
     case"bateria":return s.bateria?[s.bateria.porcentaje+" %"+(s.bateria.cargando?L(" · cargando"):""),s.bateria.porcentaje]:[L("Sin batería"),null];
-    case"multimedia":{const m=s.medios||{};return[m.titulo?m.titulo:"⏮  ⏯  ⏭",null]}
+    case"multimedia":{const m=s.medios||{};if(!m.titulo)return["⏮  ⏯  ⏭",null];
+      // Con tiempo: "Cancion · 1:23 / 3:45" y la barra de progreso debajo.
+      if(!(m.duracion>0))return[m.titulo,null];
+      const ms=x=>{x=Math.floor(x||0);const h=Math.floor(x/3600),mi=Math.floor(x/60)%60,se=x%60;return(h?h+":"+(mi<10?"0":""):"")+mi+":"+(se<10?"0":"")+se};
+      const ps=Math.min(m.posicion||0,m.duracion);return[m.titulo+" · "+ms(ps)+" / "+ms(m.duracion),100*ps/m.duracion]}
     case"imagen":return[w&&w.imagen?"":L("Elige una foto o un GIF"),null];
   }return["",null];
 }

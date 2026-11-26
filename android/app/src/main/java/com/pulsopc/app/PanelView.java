@@ -52,6 +52,8 @@ public class PanelView extends View {
     private final Path ruta = new Path();
 
     private JSONObject s;
+    /** Cuando llegaron los datos: con eso se adelanta el tiempo de la cancion entre lecturas. */
+    private long recibido;
     private String aviso = T.t("Iniciando...", "Starting...");
     private long ultimaRespuesta;
 
@@ -181,6 +183,7 @@ public class PanelView extends View {
 
     public void actualizar(JSONObject datos) {
         s = datos;
+        recibido = System.currentTimeMillis();
         aviso = null;
         ultimaRespuesta = System.currentTimeMillis();
         JSONObject cpu = datos.optJSONObject("cpu");
@@ -553,6 +556,8 @@ public class PanelView extends View {
             if (!app.isEmpty()) sub = sub.isEmpty() ? app : sub + "  ·  " + app;
             c.drawText(encajar(sub, tw), tx, cy + 26 * dp, pTexto);
             top += lado + 8 * dp;
+            double dur = m.optDouble("duracion", 0);
+            if (dur > 0) top = tiempoCancion(c, m, dur, sonando, x, top, w);
         }
         // Dos filas de botones: anterior / play-pausa / siguiente y volumen - / silencio / +
         float zonaH = y + h - top;
@@ -573,6 +578,42 @@ public class PanelView extends View {
                 icono(c, acc, cx, cy, b * 0.22f, activo ? FONDO : TEXTO, sonando);
             }
         }
+    }
+
+    /**
+     * Barra de progreso con "1:23" a la izquierda y "3:45" a la derecha. Entre una lectura y
+     * otra la posicion se adelanta aqui si esta sonando, asi el tiempo avanza segundo a segundo.
+     */
+    private float tiempoCancion(Canvas c, JSONObject m, double dur, boolean sonando, float x, float top, float w) {
+        double pos = m.optDouble("posicion", 0);
+        if (sonando) pos += (System.currentTimeMillis() - recibido) / 1000.0;
+        pos = Math.max(0, Math.min(pos, dur));
+        float alto = 4 * dp;
+        r.set(x, top, x + w, top + alto);
+        pRelleno.setColor(PISTA);
+        c.drawRoundRect(r, alto / 2, alto / 2, pRelleno);
+        r.set(x, top, x + Math.max(alto, (float) (w * pos / dur)), top + alto);
+        pRelleno.setColor(ACENTO);
+        c.drawRoundRect(r, alto / 2, alto / 2, pRelleno);
+        pTexto.setColor(TENUE);
+        pTexto.setTextSize(11 * dp);
+        float ty = top + alto + 13 * dp;
+        pTexto.setTextAlign(Paint.Align.LEFT);
+        c.drawText(minSeg(pos), x, ty, pTexto);
+        pTexto.setTextAlign(Paint.Align.RIGHT);
+        c.drawText(minSeg(dur), x + w, ty, pTexto);
+        pTexto.setTextAlign(Paint.Align.LEFT);
+        // Se vuelve a pintar justo al cambiar de segundo (solo mientras suena).
+        if (sonando) postInvalidateDelayed(1000 - (long) ((pos * 1000) % 1000));
+        return ty + 8 * dp;
+    }
+
+    /** 83 -> "1:23"; 3725 -> "1:02:05". */
+    private static String minSeg(double segundos) {
+        int t = (int) segundos;
+        int h = t / 3600, mi = (t / 60) % 60, se = t % 60;
+        String ss = (se < 10 ? "0" : "") + se;
+        return h > 0 ? h + ":" + (mi < 10 ? "0" : "") + mi + ":" + ss : mi + ":" + ss;
     }
 
     /** Nota musical tenue para el hueco de la portada mientras no hay imagen. */
