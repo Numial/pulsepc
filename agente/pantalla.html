@@ -35,6 +35,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--fondo);color:var
 .med{display:flex;gap:1.5vw;align-items:center;flex:1;min-height:0}
 .med img{height:100%;max-height:22vh;aspect-ratio:1;object-fit:cover;border-radius:1.2vh}
 .med .g{color:var(--texto);font-size:4vh;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tl{margin-top:.6vh}.tl .b{margin:.4vh 0}.tl .l{font-size:2.2vh;opacity:.8}.tl .l span:last-child{color:inherit}
 canvas{flex:1;width:100%;min-height:0}
 .w.img{padding:0;position:relative}
 .w.img .c{position:absolute;inset:0}
@@ -53,6 +54,13 @@ function L(es,en){return EN?en:es}
 function LOC(){return EN?"en-GB":"es-ES"}
 var S=null,D=null,pag=0,cambio=Date.now(),hist={},HMAX=60,ultOK=0,versionD=null;
 function e(x){return String(x==null?"":x).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+// 83 -> "1:23"; 3725 -> "1:02:05"
+function minSeg(x){x=Math.floor(x||0);var h=Math.floor(x/3600),m=Math.floor(x/60)%60,s=x%60;
+  return (h?h+":"+(m<10?"0":""):"")+m+":"+(s<10?"0":"")+s}
+// Posicion de la cancion: la ultima recibida y, si suena, lo que ha pasado desde entonces.
+function tiempoMedios(){var m=S&&S.medios,els=document.querySelectorAll(".tl");if(!m||!(m.duracion>0)||!els.length)return;
+  var p=(m.posicion||0)+(m.estado=="reproduciendo"?(Date.now()-ultOK)/1000:0);p=Math.max(0,Math.min(p,m.duracion));
+  for(var i=0;i<els.length;i++){els[i].querySelector("i").style.width=(100*p/m.duracion)+"%";els[i].querySelector(".tla").textContent=minSeg(p)}}
 function n(x,d){return x==null||isNaN(x)?"–":Number(x).toFixed(d||0)}
 function bar(p,c){return '<div class="b"><i style="width:'+Math.max(0,Math.min(100,p||0))+'%'+(c?';background:'+c:'')+'"></i></div>'}
 function vel(k){return k==null?"–":k>=1024?n(k/1024,1)+" MB/s":n(k)+" KB/s"}
@@ -94,7 +102,9 @@ var W={
    return{t:L("Batería","Battery"),h:'<div class="g">'+n(b.porcentaje)+'<small> %</small></div>'+bar(b.porcentaje)+'<div class="s">'+(b.cargando?L("Cargando","Charging"):b.minutos?Math.floor(b.minutos/60)+" h "+(b.minutos%60)+" min":"")+'</div>'}},
  multimedia:function(){var m=S.medios||{};if(!m.titulo)return{t:"Multimedia",h:'<div class="s">'+L("No suena nada","Nothing playing")+'</div>'};
    return{t:L("Suena ahora","Now playing")+(m.app?" · "+m.app:""),h:'<div class="med">'+(m.portada_id?'<span class="ph" data-src="/portada?id='+encodeURIComponent(m.portada_id)+'"></span>':'')+
-   '<div style="min-width:0"><div class="g">'+e(m.titulo)+'</div><div class="s">'+e(m.artista||"")+(m.estado=="pausa"?L(" · en pausa"," · paused"):"")+'</div></div></div>'}},
+   '<div style="min-width:0"><div class="g">'+e(m.titulo)+'</div><div class="s">'+e(m.artista||"")+(m.estado=="pausa"?L(" · en pausa"," · paused"):"")+'</div></div></div>'+
+   // Tiempo: la posicion la rellena tiempoMedios() cada segundo sin rehacer la rejilla.
+   (m.duracion>0?'<div class="tl"><div class="b"><i></i></div><div class="l"><span class="tla"></span><span>'+minSeg(m.duracion)+'</span></div></div>':'')}},
  imagen:function(w){if(!w.imagen)return{t:L("Imagen","Image"),h:'<div class="s">'+L("Elige una foto o un GIF en el editor","Choose a photo or GIF in the editor")+'</div>'};
    return{t:"",img:1,h:'<span class="ph" data-src="/imagen?id='+encodeURIComponent(w.imagen)+'" data-ajuste="'+(w.ajuste=="contener"?"contain":"cover")+'"></span>'}},
  grafica:function(w){var m=w.metrica||"cpu",v=valor(m);return{t:(EN?NOMBRE_M_EN:NOMBRE_M)[m],a:(m=="temp_cpu"||m=="temp_gpu")&&v>=D.alerta_temp,graf:m,
@@ -162,11 +172,12 @@ function pedir(){var r=new XMLHttpRequest(),sig=function(){setTimeout(pedir,2000
     if(Date.now()-INICIO>7200000){location.reload();return}
     if(s.idioma)EN=s.idioma=="en";document.documentElement.lang=EN?"en":"es";
     document.getElementById("espera").textContent=L("PulsePC · esperando al PC…","PulsePC · waiting for the PC…");
-    if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar()}catch(x){}finally{sig()}};r.send()}
+    if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar();tiempoMedios()}catch(x){}finally{sig()}};r.send()}
 document.getElementById("espera").textContent=L("PulsePC · esperando al PC…","PulsePC · waiting for the PC…");
 pedir();
 // Sin datos 30 s: se oscurece y avisa. Anti-quemado: se mueve un poco cada minuto.
 setInterval(function(){var sin=Date.now()-ultOK>30000;document.getElementById("espera").style.display=sin?"flex":"none";
   document.getElementById("raiz").style.opacity=sin?0:1},2000);
+setInterval(tiempoMedios,1000);
 setInterval(function(){document.getElementById("raiz").style.transform="translate("+(Math.round(Math.random()*6)-3)+"px,"+(Math.round(Math.random()*6)-3)+"px)"},60000);
 </script></body></html>

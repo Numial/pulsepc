@@ -580,6 +580,13 @@ def leer_medios():
         return {}
     d = dict(_medios["datos"])
     d.pop("portada_ruta", None)
+    # La posicion se leyo hace hasta un segundo: se adelanta a "ahora" si esta sonando.
+    try:
+        if d.get("estado") == "reproduciendo" and d.get("duracion"):
+            d["posicion"] = round(min(float(d.get("posicion") or 0) + time.time() - _medios["t"],
+                                      float(d["duracion"])), 1)
+    except (TypeError, ValueError):
+        pass
     return d
 
 

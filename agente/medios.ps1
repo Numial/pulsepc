@@ -1,6 +1,7 @@
 # PulsePC - lo que suena ahora en Windows (Spotify, navegador, reproductor...).
 # Lo arranca el agente (oculto). Escribe una linea JSON por segundo en la salida:
-#   {"titulo":"...","artista":"...","app":"Spotify.exe","estado":"reproduciendo"}
+#   {"titulo":"...","artista":"...","app":"Spotify.exe","estado":"reproduciendo",
+#    "posicion":83.4,"duracion":215.0}   (segundos; sin posicion/duracion si la app no las da)
 # o {} si no hay ninguna sesion multimedia. Termina solo cuando se cierra la salida.
 # Usa la API de WinRT GlobalSystemMediaTransportControlsSessionManager (Windows 10 1809+).
 param([int]$IntervaloMs = 1000)
@@ -121,6 +122,23 @@ while (AgenteVivo) {
                 $portada.intentos++
                 if (GuardarPortada $p) { $portada.ruta = $rutaPortada }
             }
+            # Tiempo de la cancion/video. Windows da la posicion del momento en que la app la
+            # actualizo (LastUpdatedTime), y algunas apps (Spotify) solo la actualizan al
+            # cambiar algo: si esta sonando, se le suma lo que ha pasado desde entonces.
+            $pos = $null; $dur = $null
+            try {
+                $tl = $s.GetTimelineProperties()
+                $d = ($tl.EndTime - $tl.StartTime).TotalSeconds
+                if ($d -gt 0) {
+                    $x = ($tl.Position - $tl.StartTime).TotalSeconds
+                    if ($est -eq 'Playing' -and $tl.LastUpdatedTime.Year -gt 2000) {
+                        $pasado = ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds
+                        if ($pasado -gt 0 -and $pasado -lt 86400) { $x += $pasado }
+                    }
+                    $dur = [Math]::Round($d, 1)
+                    $pos = [Math]::Round([Math]::Min([Math]::Max($x, 0), $d), 1)
+                }
+            } catch { $pos = $null; $dur = $null }
             $dato = [ordered]@{
                 titulo       = $titulo
                 artista      = $artista
@@ -129,6 +147,7 @@ while (AgenteVivo) {
                 portada_ruta = $portada.ruta
                 portada_id   = if ($portada.ruta) { $portada.id } else { '' }
             }
+            if ($dur -ne $null) { $dato['posicion'] = $pos; $dato['duracion'] = $dur }
         }
     } catch {
         $dato = $null   # la sesion puede cerrarse a mitad de lectura
