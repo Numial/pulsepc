@@ -60,7 +60,7 @@ public class PanelView extends View {
     private String relojId = "";
 
     /**
-     * Cada dato nuevo solo corrige el reloj si se aleja mas de 2 s (salto en la cancion);
+     * Cada dato nuevo solo corrige el reloj si se aleja 5 s o mas (salto en la cancion);
      * si no, se sigue contando desde el reloj propio y el tiempo nunca va hacia atras por
      * el retraso de la red entre lecturas.
      */
@@ -71,7 +71,7 @@ public class PanelView extends View {
         double nueva = m.optDouble("posicion", 0);
         long ahora = System.currentTimeMillis();
         double prevista = relojPos + (suena ? (ahora - relojMs) / 1000.0 : 0);
-        if (!id.equals(relojId) || Math.abs(nueva - prevista) >= 2) prevista = nueva;
+        if (!id.equals(relojId) || Math.abs(nueva - prevista) >= 5) prevista = nueva;
         relojPos = prevista;
         relojMs = ahora;
         relojId = id;

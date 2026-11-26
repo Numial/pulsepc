@@ -72,7 +72,7 @@ $md5 = [System.Security.Cryptography.MD5]::Create()
 $portada = @{ id = ''; ruta = ''; intentos = 0 }
 
 # Reloj propio de la cancion (ver "Tiempo de la cancion" mas abajo).
-$reloj = @{ id = ''; est = ''; firma = ''; p0 = -1.0; base = 0.0; sw = [System.Diagnostics.Stopwatch]::StartNew() }
+$reloj = @{ id = ''; est = ''; firma = ''; p0 = -1.0; lejos = 0; base = 0.0; sw = [System.Diagnostics.Stopwatch]::StartNew() }
 
 function IdCancion($titulo, $artista, $app) {
     if (-not $titulo -and -not $artista) { return '' }
@@ -129,8 +129,8 @@ while (AgenteVivo) {
             # navegadores actualizan la posicion solo a ratos, y LastUpdatedTime no siempre se
             # actualiza a la vez, asi que "Position + lo que ha pasado desde LastUpdatedTime"
             # unas veces se queda atras y otras se pasa. Por eso se lleva un reloj propio que
-            # avanza solo mientras suena, y Windows solo lo corrige cuando trae un dato nuevo
-            # que se aleja mas de 3 s (salto en la cancion), o al cambiar de cancion o de estado.
+            # avanza solo mientras suena, y Windows solo lo corrige cuando trae datos nuevos que
+            # se alejan mas de 5 s (salto en la cancion), o al cambiar de cancion o de estado.
             $pos = $null; $dur = $null
             try {
                 $tl = $s.GetTimelineProperties()
@@ -155,9 +155,14 @@ while (AgenteVivo) {
                     $prev = $reloj.base
                     if ($reloj.est -eq 'Playing') { $prev += $reloj.sw.Elapsed.TotalSeconds }
                     $mismo = $reloj.id -eq $id -and $reloj.est -eq $est
-                    if ($mismo -and (-not $nuevo -or [Math]::Abs($x - $prev) -lt 3)) {
+                    # Un dato suelto que se aleja no basta (Windows a veces manda uno malo): hace
+                    # falta que dos lecturas nuevas seguidas se alejen mas de 5 s.
+                    $lejos = $nuevo -and [Math]::Abs($x - $prev) -ge 5
+                    if ($lejos) { $reloj.lejos++ } elseif ($nuevo) { $reloj.lejos = 0 }
+                    if ($mismo -and $reloj.lejos -lt 2) {
                         $x = [Math]::Min($prev, $d)   # se sigue el reloj propio
                     } else {
+                        $reloj.lejos = 0
                         $reloj.base = $x
                         $reloj.sw.Restart()
                     }
