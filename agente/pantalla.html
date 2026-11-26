@@ -57,9 +57,15 @@ function e(x){return String(x==null?"":x).replace(/[&<>"]/g,function(c){return{"
 // 83 -> "1:23"; 3725 -> "1:02:05"
 function minSeg(x){x=Math.floor(x||0);var h=Math.floor(x/3600),m=Math.floor(x/60)%60,s=x%60;
   return (h?h+":"+(m<10?"0":""):"")+m+":"+(s<10?"0":"")+s}
-// Posicion de la cancion: la ultima recibida y, si suena, lo que ha pasado desde entonces.
+// Reloj propio de la cancion: cada dato nuevo solo lo corrige si se aleja mas de 2 s (salto en
+// la cancion); asi el tiempo no va hacia atras por el retraso de la red entre lecturas.
+var RC={id:"",pos:0,t:0};
+function relojCancion(){var m=S&&S.medios;if(!m||!(m.duracion>0)){RC.id="";return}
+  var suena=m.estado=="reproduciendo",id=m.titulo+"|"+m.artista+"|"+suena,ahora=Date.now(),
+    prev=RC.pos+(suena?(ahora-RC.t)/1000:0),nueva=m.posicion||0;
+  if(id!==RC.id||Math.abs(nueva-prev)>=2)prev=nueva;RC={id:id,pos:prev,t:ahora}}
 function tiempoMedios(){var m=S&&S.medios,els=document.querySelectorAll(".tl");if(!m||!(m.duracion>0)||!els.length)return;
-  var p=(m.posicion||0)+(m.estado=="reproduciendo"?(Date.now()-ultOK)/1000:0);p=Math.max(0,Math.min(p,m.duracion));
+  var p=RC.pos+(m.estado=="reproduciendo"?(Date.now()-RC.t)/1000:0);p=Math.max(0,Math.min(p,m.duracion));
   for(var i=0;i<els.length;i++){els[i].querySelector("i").style.width=(100*p/m.duracion)+"%";els[i].querySelector(".tla").textContent=minSeg(p)}}
 function n(x,d){return x==null||isNaN(x)?"–":Number(x).toFixed(d||0)}
 function bar(p,c){return '<div class="b"><i style="width:'+Math.max(0,Math.min(100,p||0))+'%'+(c?';background:'+c:'')+'"></i></div>'}
@@ -172,7 +178,7 @@ function pedir(){var r=new XMLHttpRequest(),sig=function(){setTimeout(pedir,2000
     if(Date.now()-INICIO>7200000){location.reload();return}
     if(s.idioma)EN=s.idioma=="en";document.documentElement.lang=EN?"en":"es";
     document.getElementById("espera").textContent=L("PulsePC · esperando al PC…","PulsePC · waiting for the PC…");
-    if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();pintar();tiempoMedios()}catch(x){}finally{sig()}};r.send()}
+    if(!s.cpu)return;S=s;D=s.diseno||D;ultOK=Date.now();aplicarTema();guardarHist();relojCancion();pintar();tiempoMedios()}catch(x){}finally{sig()}};r.send()}
 document.getElementById("espera").textContent=L("PulsePC · esperando al PC…","PulsePC · waiting for the PC…");
 pedir();
 // Sin datos 30 s: se oscurece y avisa. Anti-quemado: se mueve un poco cada minuto.
