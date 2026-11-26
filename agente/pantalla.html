@@ -57,13 +57,14 @@ function e(x){return String(x==null?"":x).replace(/[&<>"]/g,function(c){return{"
 // 83 -> "1:23"; 3725 -> "1:02:05"
 function minSeg(x){x=Math.floor(x||0);var h=Math.floor(x/3600),m=Math.floor(x/60)%60,s=x%60;
   return (h?h+":"+(m<10?"0":""):"")+m+":"+(s<10?"0":"")+s}
-// Reloj propio de la cancion: cada dato nuevo solo lo corrige si se aleja 5 s o mas (salto en
-// la cancion); asi el tiempo no va hacia atras por el retraso de la red entre lecturas.
+// Reloj propio de la cancion: el PC ya manda un tiempo suave; aqui solo se evita que el retraso
+// de la red lo haga ir hacia atras (si va por delante se toma; si va detras se frena poco a poco).
 var RC={id:"",pos:0,t:0};
 function relojCancion(){var m=S&&S.medios;if(!m||!(m.duracion>0)){RC.id="";return}
   var suena=m.estado=="reproduciendo",id=m.titulo+"|"+m.artista+"|"+suena,ahora=Date.now(),
     prev=RC.pos+(suena?(ahora-RC.t)/1000:0),nueva=m.posicion||0;
-  if(id!==RC.id||Math.abs(nueva-prev)>=5)prev=nueva;RC={id:id,pos:prev,t:ahora}}
+  var dif=nueva-prev;if(id!==RC.id||Math.abs(dif)>=5||dif>0)prev=nueva;else prev+=Math.max(dif,-.25);
+  RC={id:id,pos:prev,t:ahora}}
 function tiempoMedios(){var m=S&&S.medios,els=document.querySelectorAll(".tl");if(!m||!(m.duracion>0)||!els.length)return;
   var p=RC.pos+(m.estado=="reproduciendo"?(Date.now()-RC.t)/1000:0);p=Math.max(0,Math.min(p,m.duracion));
   for(var i=0;i<els.length;i++){els[i].querySelector("i").style.width=(100*p/m.duracion)+"%";els[i].querySelector(".tla").textContent=minSeg(p)}}

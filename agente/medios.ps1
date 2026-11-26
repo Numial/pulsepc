@@ -1,10 +1,11 @@
 # PulsePC - lo que suena ahora en Windows (Spotify, navegador, reproductor...).
-# Lo arranca el agente (oculto). Escribe una linea JSON por segundo en la salida:
+# Lo arranca el agente (oculto). Escribe una linea JSON cada 0,4 s en la salida (asi se
+# nota enseguida el cambio de cancion o la pausa):
 #   {"titulo":"...","artista":"...","app":"Spotify.exe","estado":"reproduciendo",
 #    "posicion":83.4,"duracion":215.0}   (segundos; sin posicion/duracion si la app no las da)
 # o {} si no hay ninguna sesion multimedia. Termina solo cuando se cierra la salida.
 # Usa la API de WinRT GlobalSystemMediaTransportControlsSessionManager (Windows 10 1809+).
-param([int]$IntervaloMs = 1000)
+param([int]$IntervaloMs = 400)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -72,7 +73,7 @@ $md5 = [System.Security.Cryptography.MD5]::Create()
 $portada = @{ id = ''; ruta = ''; intentos = 0 }
 
 # Reloj propio de la cancion (ver "Tiempo de la cancion" mas abajo).
-$reloj = @{ id = ''; est = ''; firma = ''; p0 = -1.0; lejos = 0; base = 0.0; sw = [System.Diagnostics.Stopwatch]::StartNew() }
+$reloj = @{ id = ''; est = ''; p0 = -1.0; base = 0.0; sw = [System.Diagnostics.Stopwatch]::StartNew() }
 
 function IdCancion($titulo, $artista, $app) {
     if (-not $titulo -and -not $artista) { return '' }
@@ -120,8 +121,8 @@ while (AgenteVivo) {
                 $portada.id = $id; $portada.ruta = ''; $portada.intentos = 0
             }
             # La miniatura a veces llega bastante despues que el titulo (en Spotify, al pasar
-            # de cancion, mas de 5 s): se reintenta una vez por segundo durante 20 s.
-            if ($id -and -not $portada.ruta -and $portada.intentos -lt 20) {
+            # de cancion, mas de 5 s): se reintenta en cada vuelta durante unos 20 s.
+            if ($id -and -not $portada.ruta -and $portada.intentos -lt 50) {
                 $portada.intentos++
                 if (GuardarPortada $p) { $portada.ruta = $rutaPortada }
             }
@@ -129,16 +130,19 @@ while (AgenteVivo) {
             # navegadores actualizan la posicion solo a ratos, y LastUpdatedTime no siempre se
             # actualiza a la vez, asi que "Position + lo que ha pasado desde LastUpdatedTime"
             # unas veces se queda atras y otras se pasa. Por eso se lleva un reloj propio que
-            # avanza solo mientras suena, y Windows solo lo corrige cuando trae datos nuevos que
-            # se alejan mas de 5 s (salto en la cancion), o al cambiar de cancion o de estado.
+            # avanza solo mientras suena y se va ajustando con cada posicion nueva:
+            #  - salto de 5 s o mas (has movido la barra): se va ahi directamente;
+            #  - el reloj va atrasado: se adelanta hasta 1 s por lectura;
+            #  - el reloj va adelantado: se frena poco a poco (0,25 s por lectura), sin
+            #    retroceder de golpe.
+            # Al pausar o reanudar se sigue desde donde iba el reloj, sin volver atras.
             $pos = $null; $dur = $null
             try {
                 $tl = $s.GetTimelineProperties()
                 $d = ($tl.EndTime - $tl.StartTime).TotalSeconds
                 if ($d -gt 0) {
                     $p0 = ($tl.Position - $tl.StartTime).TotalSeconds
-                    $firma = "$($tl.Position.Ticks)|$($tl.LastUpdatedTime.UtcTicks)"
-                    $nuevo = $firma -ne $reloj.firma
+                    $fresco = $reloj.id -eq $id -and $p0 -ne $reloj.p0
                     $x = $p0
                     if ($est -eq 'Playing') {
                         $pasado = 0.0
@@ -146,29 +150,30 @@ while (AgenteVivo) {
                             $pasado = ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds
                             if ($pasado -lt 0 -or $pasado -gt 86400) { $pasado = 0.0 }
                         }
-                        # Si la posicion acaba de cambiar (se lee cada segundo), es de hace menos
-                        # de 1 s aunque LastUpdatedTime diga otra cosa.
-                        if ($reloj.id -eq $id -and $p0 -ne $reloj.p0) { $pasado = [Math]::Min($pasado, 1.0) }
+                        # Si la posicion acaba de cambiar es de esta ultima vuelta (menos de medio
+                        # segundo), aunque LastUpdatedTime diga otra cosa.
+                        if ($fresco) { $pasado = [Math]::Min($pasado, 0.5) }
                         $x += $pasado
                     }
                     $x = [Math]::Min([Math]::Max($x, 0), $d)
-                    $prev = $reloj.base
-                    if ($reloj.est -eq 'Playing') { $prev += $reloj.sw.Elapsed.TotalSeconds }
-                    $mismo = $reloj.id -eq $id -and $reloj.est -eq $est
-                    # Un dato suelto que se aleja no basta (Windows a veces manda uno malo): hace
-                    # falta que dos lecturas nuevas seguidas se alejen mas de 5 s.
-                    $lejos = $nuevo -and [Math]::Abs($x - $prev) -ge 5
-                    if ($lejos) { $reloj.lejos++ } elseif ($nuevo) { $reloj.lejos = 0 }
-                    if ($mismo -and $reloj.lejos -lt 2) {
-                        $x = [Math]::Min($prev, $d)   # se sigue el reloj propio
+                    if ($reloj.id -ne $id) {
+                        $nuevo = $x                       # otra cancion: lo que diga Windows
                     } else {
-                        $reloj.lejos = 0
-                        $reloj.base = $x
-                        $reloj.sw.Restart()
+                        $nuevo = $reloj.base
+                        if ($reloj.est -eq 'Playing') { $nuevo += $reloj.sw.Elapsed.TotalSeconds }
+                        if ($fresco) {
+                            $dif = $x - $nuevo
+                            if ([Math]::Abs($dif) -ge 5) { $nuevo = $x }
+                            elseif ($dif -gt 0) { $nuevo += [Math]::Min($dif, 1.0) }
+                            else { $nuevo += [Math]::Max($dif, -0.25) }
+                        }
                     }
-                    $reloj.id = $id; $reloj.est = $est; $reloj.firma = $firma; $reloj.p0 = $p0
+                    $nuevo = [Math]::Min([Math]::Max($nuevo, 0), $d)
+                    $reloj.base = $nuevo
+                    $reloj.sw.Restart()
+                    $reloj.id = $id; $reloj.est = $est; $reloj.p0 = $p0
                     $dur = [Math]::Round($d, 1)
-                    $pos = [Math]::Round($x, 1)
+                    $pos = [Math]::Round($nuevo, 1)
                 }
             } catch { $pos = $null; $dur = $null }
             $dato = [ordered]@{

@@ -60,9 +60,9 @@ public class PanelView extends View {
     private String relojId = "";
 
     /**
-     * Cada dato nuevo solo corrige el reloj si se aleja 5 s o mas (salto en la cancion);
-     * si no, se sigue contando desde el reloj propio y el tiempo nunca va hacia atras por
-     * el retraso de la red entre lecturas.
+     * El PC ya manda un tiempo suave; aqui solo se evita que el retraso de la red entre
+     * lecturas lo haga ir hacia atras: si el dato nuevo va por delante se toma, si va un
+     * poco por detras se frena poco a poco, y con 5 s o mas (salto) se va ahi directamente.
      */
     private void relojCancion(JSONObject m) {
         if (m == null || m.optDouble("duracion", 0) <= 0) { relojId = ""; return; }
@@ -71,7 +71,10 @@ public class PanelView extends View {
         double nueva = m.optDouble("posicion", 0);
         long ahora = System.currentTimeMillis();
         double prevista = relojPos + (suena ? (ahora - relojMs) / 1000.0 : 0);
-        if (!id.equals(relojId) || Math.abs(nueva - prevista) >= 5) prevista = nueva;
+        double dif = nueva - prevista;
+        if (!id.equals(relojId) || Math.abs(dif) >= 5) prevista = nueva;   // otra cancion o salto
+        else if (dif > 0) prevista = nueva;                                // el PC va por delante
+        else prevista += Math.max(dif, -0.25);                             // se frena sin retroceder de golpe
         relojPos = prevista;
         relojMs = ahora;
         relojId = id;
