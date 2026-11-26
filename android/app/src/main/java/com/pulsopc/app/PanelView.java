@@ -52,8 +52,30 @@ public class PanelView extends View {
     private final Path ruta = new Path();
 
     private JSONObject s;
-    /** Cuando llegaron los datos: con eso se adelanta el tiempo de la cancion entre lecturas. */
+    /** Cuando llegaron los datos. */
     private long recibido;
+    /** Reloj propio de la cancion: posicion en relojMs, y que cancion/estado era. */
+    private double relojPos;
+    private long relojMs;
+    private String relojId = "";
+
+    /**
+     * Cada dato nuevo solo corrige el reloj si se aleja mas de 2 s (salto en la cancion);
+     * si no, se sigue contando desde el reloj propio y el tiempo nunca va hacia atras por
+     * el retraso de la red entre lecturas.
+     */
+    private void relojCancion(JSONObject m) {
+        if (m == null || m.optDouble("duracion", 0) <= 0) { relojId = ""; return; }
+        boolean suena = "reproduciendo".equals(m.optString("estado", ""));
+        String id = m.optString("titulo", "") + "|" + m.optString("artista", "") + "|" + suena;
+        double nueva = m.optDouble("posicion", 0);
+        long ahora = System.currentTimeMillis();
+        double prevista = relojPos + (suena ? (ahora - relojMs) / 1000.0 : 0);
+        if (!id.equals(relojId) || Math.abs(nueva - prevista) >= 2) prevista = nueva;
+        relojPos = prevista;
+        relojMs = ahora;
+        relojId = id;
+    }
     private String aviso = T.t("Iniciando...", "Starting...");
     private long ultimaRespuesta;
 
@@ -184,6 +206,7 @@ public class PanelView extends View {
     public void actualizar(JSONObject datos) {
         s = datos;
         recibido = System.currentTimeMillis();
+        relojCancion(datos.optJSONObject("medios"));
         aviso = null;
         ultimaRespuesta = System.currentTimeMillis();
         JSONObject cpu = datos.optJSONObject("cpu");
@@ -585,8 +608,8 @@ public class PanelView extends View {
      * otra la posicion se adelanta aqui si esta sonando, asi el tiempo avanza segundo a segundo.
      */
     private float tiempoCancion(Canvas c, JSONObject m, double dur, boolean sonando, float x, float top, float w) {
-        double pos = m.optDouble("posicion", 0);
-        if (sonando) pos += (System.currentTimeMillis() - recibido) / 1000.0;
+        double pos = relojPos;
+        if (sonando) pos += (System.currentTimeMillis() - relojMs) / 1000.0;
         pos = Math.max(0, Math.min(pos, dur));
         float alto = 4 * dp;
         r.set(x, top, x + w, top + alto);

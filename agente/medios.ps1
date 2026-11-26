@@ -71,6 +71,9 @@ $rutaPortada = Join-Path $env:TEMP 'pulsopc_portada.jpg'
 $md5 = [System.Security.Cryptography.MD5]::Create()
 $portada = @{ id = ''; ruta = ''; intentos = 0 }
 
+# Reloj propio de la cancion (ver "Tiempo de la cancion" mas abajo).
+$reloj = @{ id = ''; est = ''; firma = ''; p0 = -1.0; base = 0.0; sw = [System.Diagnostics.Stopwatch]::StartNew() }
+
 function IdCancion($titulo, $artista, $app) {
     if (-not $titulo -and -not $artista) { return '' }
     $b = [System.Text.Encoding]::UTF8.GetBytes("$titulo|$artista|$app")
@@ -122,21 +125,45 @@ while (AgenteVivo) {
                 $portada.intentos++
                 if (GuardarPortada $p) { $portada.ruta = $rutaPortada }
             }
-            # Tiempo de la cancion/video. Windows da la posicion del momento en que la app la
-            # actualizo (LastUpdatedTime), y algunas apps (Spotify) solo la actualizan al
-            # cambiar algo: si esta sonando, se le suma lo que ha pasado desde entonces.
+            # Tiempo de la cancion/video. Lo que da Windows va a tirones: Spotify y los
+            # navegadores actualizan la posicion solo a ratos, y LastUpdatedTime no siempre se
+            # actualiza a la vez, asi que "Position + lo que ha pasado desde LastUpdatedTime"
+            # unas veces se queda atras y otras se pasa. Por eso se lleva un reloj propio que
+            # avanza solo mientras suena, y Windows solo lo corrige cuando trae un dato nuevo
+            # que se aleja mas de 3 s (salto en la cancion), o al cambiar de cancion o de estado.
             $pos = $null; $dur = $null
             try {
                 $tl = $s.GetTimelineProperties()
                 $d = ($tl.EndTime - $tl.StartTime).TotalSeconds
                 if ($d -gt 0) {
-                    $x = ($tl.Position - $tl.StartTime).TotalSeconds
-                    if ($est -eq 'Playing' -and $tl.LastUpdatedTime.Year -gt 2000) {
-                        $pasado = ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds
-                        if ($pasado -gt 0 -and $pasado -lt 86400) { $x += $pasado }
+                    $p0 = ($tl.Position - $tl.StartTime).TotalSeconds
+                    $firma = "$($tl.Position.Ticks)|$($tl.LastUpdatedTime.UtcTicks)"
+                    $nuevo = $firma -ne $reloj.firma
+                    $x = $p0
+                    if ($est -eq 'Playing') {
+                        $pasado = 0.0
+                        if ($tl.LastUpdatedTime.Year -gt 2000) {
+                            $pasado = ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalSeconds
+                            if ($pasado -lt 0 -or $pasado -gt 86400) { $pasado = 0.0 }
+                        }
+                        # Si la posicion acaba de cambiar (se lee cada segundo), es de hace menos
+                        # de 1 s aunque LastUpdatedTime diga otra cosa.
+                        if ($reloj.id -eq $id -and $p0 -ne $reloj.p0) { $pasado = [Math]::Min($pasado, 1.0) }
+                        $x += $pasado
                     }
+                    $x = [Math]::Min([Math]::Max($x, 0), $d)
+                    $prev = $reloj.base
+                    if ($reloj.est -eq 'Playing') { $prev += $reloj.sw.Elapsed.TotalSeconds }
+                    $mismo = $reloj.id -eq $id -and $reloj.est -eq $est
+                    if ($mismo -and (-not $nuevo -or [Math]::Abs($x - $prev) -lt 3)) {
+                        $x = [Math]::Min($prev, $d)   # se sigue el reloj propio
+                    } else {
+                        $reloj.base = $x
+                        $reloj.sw.Restart()
+                    }
+                    $reloj.id = $id; $reloj.est = $est; $reloj.firma = $firma; $reloj.p0 = $p0
                     $dur = [Math]::Round($d, 1)
-                    $pos = [Math]::Round([Math]::Min([Math]::Max($x, 0), $d), 1)
+                    $pos = [Math]::Round($x, 1)
                 }
             } catch { $pos = $null; $dur = $null }
             $dato = [ordered]@{
